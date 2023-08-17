@@ -36,6 +36,11 @@ type v2ray struct {
 		Header      *json.RawMessage `json:"header"`
 	} `json:"networkSettings"`
         VlessFlow string `json:"flow"`
+        TlsSettings struct {
+                Sni         string `json:"server_name"`
+                PrivateKey  string `json:"private_key"`
+                ShortId     string `json:"shortId"`
+        } `json:"tls_settings"`
 	Tls int `json:"tls"`
 }
 

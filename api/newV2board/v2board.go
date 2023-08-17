@@ -386,7 +386,7 @@ func (c *APIClient) parseV2rayNodeResponse(s *serverConfig) (*api.NodeInfo, erro
 		}
 	}
 
-	if s.Tls == 1 {
+	if s.Tls != 0 {
 		enableTLS = true
 	}
 
@@ -402,6 +402,8 @@ func (c *APIClient) parseV2rayNodeResponse(s *serverConfig) (*api.NodeInfo, erro
 		Host:              host,
 		EnableVless:       c.EnableVless,
 		VlessFlow:         s.VlessFlow,
+                PrivateKey:        s.TlsSettings.PrivateKey,
+                ShortId:           s.TlsSettings.ShortId,
 		ServiceName:       s.NetworkSettings.ServiceName,
 		Header:            header,
 		NameServerConfig:  s.parseDNSConfig(),

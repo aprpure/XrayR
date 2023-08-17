@@ -49,6 +49,8 @@ type NodeInfo struct {
 	EnableTLS         bool
 	EnableVless       bool
 	VlessFlow         string
+        PrivateKey        string
+        ShortId           string
 	CypherMethod      string
 	ServerKey         string
 	ServiceName       string
