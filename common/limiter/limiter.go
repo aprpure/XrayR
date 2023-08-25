@@ -14,7 +14,7 @@ import (
 	"github.com/eko/gocache/lib/v4/store"
 	goCacheStore "github.com/eko/gocache/store/go_cache/v4"
 	redisStore "github.com/eko/gocache/store/redis/v4"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	goCache "github.com/patrickmn/go-cache"
 	"golang.org/x/time/rate"
 

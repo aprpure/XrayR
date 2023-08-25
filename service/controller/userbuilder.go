@@ -62,7 +62,7 @@ func (c *Controller) buildTrojanUser(userInfo *[]api.UserInfo) (users []*protoco
 	for i, user := range *userInfo {
 		trojanAccount := &trojan.Account{
 			Password: user.UUID,
-			Flow:     "",
+			//Flow:     "",
 		}
 		users[i] = &protocol.User{
 			Level:   0,
