@@ -1,6 +1,6 @@
 module github.com/wyx2685/XrayR
 
-go 1.21.0
+go 1.21
 
 require (
 	dario.cat/mergo v1.0.0
