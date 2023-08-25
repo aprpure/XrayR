@@ -15,10 +15,10 @@ import (
 	"github.com/xtls/xray-core/features/routing"
 	"github.com/xtls/xray-core/features/stats"
 
-	"github.com/XrayR-project/XrayR/api"
-	"github.com/XrayR-project/XrayR/app/mydispatcher"
-	"github.com/XrayR-project/XrayR/common/mylego"
-	"github.com/XrayR-project/XrayR/common/serverstatus"
+	"github.com/wyx2685/XrayR/api"
+	"github.com/wyx2685/XrayR/app/mydispatcher"
+	"github.com/wyx2685/XrayR/common/mylego"
+	"github.com/wyx2685/XrayR/common/serverstatus"
 )
 
 type LimitInfo struct {

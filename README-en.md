@@ -2,13 +2,13 @@
 
 [![](https://img.shields.io/badge/TgChat-@XrayR讨论-blue.svg)](https://t.me/XrayR_project)
 [![](https://img.shields.io/badge/Channel-@XrayR通知-blue.svg)](https://t.me/XrayR_channel)
-![](https://img.shields.io/github/stars/XrayR-project/XrayR)
-![](https://img.shields.io/github/forks/XrayR-project/XrayR)
-![](https://github.com/XrayR-project/XrayR/actions/workflows/release.yml/badge.svg)
-![](https://github.com/XrayR-project/XrayR/actions/workflows/docker.yml/badge.svg)
-[![Github All Releases](https://img.shields.io/github/downloads/XrayR-project/XrayR/total.svg)]()
+![](https://img.shields.io/github/stars/wyx2685/XrayR)
+![](https://img.shields.io/github/forks/wyx2685/XrayR)
+![](https://github.com/wyx2685/XrayR/actions/workflows/release.yml/badge.svg)
+![](https://github.com/wyx2685/XrayR/actions/workflows/docker.yml/badge.svg)
+[![Github All Releases](https://img.shields.io/github/downloads/wyx2685/XrayR/total.svg)]()
 
-[Iranian(farsi) README](https://github.com/XrayR-project/XrayR/blob/master/README_Fa.md), [Vietnamese(vi) README](https://github.com/XrayR-project/XrayR/blob/master/README-vi.md), [English(en) README](https://github.com/XrayR-project/XrayR/blob/master/README-en.md)
+[Iranian(farsi) README](https://github.com/wyx2685/XrayR/blob/master/README_Fa.md), [Vietnamese(vi) README](https://github.com/wyx2685/XrayR/blob/master/README-vi.md), [English(en) README](https://github.com/wyx2685/XrayR/blob/master/README-en.md)
 
 A Xray backend framework that can easily support many panels.
 
@@ -70,7 +70,7 @@ This project is just my personal learning and development and maintenance. I do 
 ### 1-Click installation
 
 ```
-wget -N https://raw.githubusercontent.com/XrayR-project/XrayR-release/master/install.sh && bash install.sh
+wget -N https://raw.githubusercontent.com/wyx2685/XrayR-release/master/install.sh && bash install.sh
 ```
 
 ### Docker
@@ -94,7 +94,7 @@ wget -N https://raw.githubusercontent.com/XrayR-project/XrayR-release/master/ins
 
 ## Licence
 
-[Mozilla Public License Version 2.0](https://github.com/XrayR-project/XrayR/blob/master/LICENSE)
+[Mozilla Public License Version 2.0](https://github.com/wyx2685/XrayR/blob/master/LICENSE)
 
 ## Telgram
 
@@ -104,6 +104,6 @@ wget -N https://raw.githubusercontent.com/XrayR-project/XrayR-release/master/ins
 
 ## Stargazers over time
 
-[![Stargazers over time](https://starchart.cc/XrayR-project/XrayR.svg)](https://starchart.cc/XrayR-project/XrayR)
+[![Stargazers over time](https://starchart.cc/wyx2685/XrayR.svg)](https://starchart.cc/wyx2685/XrayR)
 
 

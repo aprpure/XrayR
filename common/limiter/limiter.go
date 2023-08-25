@@ -18,7 +18,7 @@ import (
 	goCache "github.com/patrickmn/go-cache"
 	"golang.org/x/time/rate"
 
-	"github.com/XrayR-project/XrayR/api"
+	"github.com/wyx2685/XrayR/api"
 )
 
 type UserInfo struct {

@@ -15,7 +15,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
 
-	"github.com/XrayR-project/XrayR/panel"
+	"github.com/wyx2685/XrayR/panel"
 )
 
 var (
