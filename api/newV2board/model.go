@@ -40,7 +40,7 @@ type v2ray struct {
         TlsSettings struct {
                 Sni         string `json:"server_name"`
                 PrivateKey  string `json:"private_key"`
-                ShortId     string `json:"shortId"`
+                ShortId     string `json:"short_id"`
         } `json:"tls_settings"`
 	Tls int `json:"tls"`
 }
