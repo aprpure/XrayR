@@ -61,4 +61,6 @@ type user struct {
 	Id         int    `json:"id"`
 	Uuid       string `json:"uuid"`
 	SpeedLimit int    `json:"speed_limit"`
+        DeviceLimit int   `json:"device_limit"`
+        AliveIp    int    `json:"alive_ip"`
 }
