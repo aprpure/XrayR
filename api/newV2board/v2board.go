@@ -248,9 +248,11 @@ func (c *APIClient) GetUserList() (UserList *[]api.UserInfo, err error) {
                 } else {
                         u.SpeedLimit = uint64(user.SpeedLimit * 1000000 / 8)
                 }
-                deviceLimit = user.DeviceLimit
-                if deviceLimit == 0 {
+                //Prefer local config
+                if c.DeviceLimit >0 {
                         deviceLimit = c.DeviceLimit
+                } else {
+                        deviceLimit = user.DeviceLimit
                 }
 
 		// If there is still device available, add the user
