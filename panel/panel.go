@@ -6,6 +6,7 @@ import (
 	"os"
 	"sync"
 
+        "github.com/wyx2685/XrayR/api/gov2panel"
 	"github.com/wyx2685/XrayR/api/newV2board"
 	"github.com/wyx2685/XrayR/app/mydispatcher"
 
@@ -22,7 +23,7 @@ import (
 	"github.com/wyx2685/XrayR/api/proxypanel"
 	"github.com/wyx2685/XrayR/api/sspanel"
 	"github.com/wyx2685/XrayR/api/v2raysocks"
-	_ "github.com/wyx2685/XrayR/main/distro/all"
+	_ "github.com/wyx2685/XrayR/cmd/distro/all"
 	"github.com/wyx2685/XrayR/service"
 	"github.com/wyx2685/XrayR/service/controller"
 )
@@ -176,7 +177,7 @@ func (p *Panel) Start() {
 		switch nodeConfig.PanelType {
 		case "SSpanel":
 			apiClient = sspanel.New(nodeConfig.ApiConfig)
-		case "NewV2board":
+		case "NewV2board", "V2board":
 			apiClient = newV2board.New(nodeConfig.ApiConfig)
 		case "PMpanel":
 			apiClient = pmpanel.New(nodeConfig.ApiConfig)
@@ -184,6 +185,8 @@ func (p *Panel) Start() {
 			apiClient = proxypanel.New(nodeConfig.ApiConfig)
 		case "V2RaySocks":
 			apiClient = v2raysocks.New(nodeConfig.ApiConfig)
+		case "GoV2Panel":
+			apiClient = gov2panel.New(nodeConfig.ApiConfig)
 		default:
 			log.Panicf("Unsupport panel type: %s", nodeConfig.PanelType)
 		}

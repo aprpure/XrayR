@@ -185,7 +185,27 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 	streamSetting.Network = &transportProtocol
 
 	// Build TLS and REALITY settings
-	if config.EnableREALITY {
+	var isREALITY bool
+	if config.DisableLocalREALITYConfig {
+		if nodeInfo.REALITYConfig != nil && nodeInfo.EnableREALITY {
+			isREALITY = true
+			streamSetting.Security = "reality"
+
+			r := nodeInfo.REALITYConfig
+			streamSetting.REALITYSettings = &conf.REALITYConfig{
+				Show:         config.REALITYConfigs.Show,
+				Dest:         []byte(`"` + r.Dest + `"`),
+				Xver:         r.ProxyProtocolVer,
+				ServerNames:  r.ServerNames,
+				PrivateKey:   r.PrivateKey,
+				MinClientVer: r.MinClientVer,
+				MaxClientVer: r.MaxClientVer,
+				MaxTimeDiff:  r.MaxTimeDiff,
+				ShortIds:     r.ShortIds,
+			}
+		}
+	} else if config.EnableREALITY && config.REALITYConfigs != nil {
+		isREALITY = true
 		dest, err := json.Marshal(config.REALITYConfigs.Dest)
 		if err != nil {
 			return nil, fmt.Errorf("marshal dest %s config fialed: %s", dest, err)
@@ -206,7 +226,9 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 			MaxTimeDiff:  config.REALITYConfigs.MaxTimeDiff,
 			ShortIds:     append(config.REALITYConfigs.ShortIds, nodeInfo.ShortId),
 		}
-	} else if nodeInfo.EnableTLS && config.CertConfig.CertMode != "none" {
+	}
+
+	if !isREALITY && nodeInfo.EnableTLS && config.CertConfig.CertMode != "none" {
 		streamSetting.Security = "tls"
 		certFile, keyFile, err := getCertFile(config.CertConfig)
 		if err != nil {
