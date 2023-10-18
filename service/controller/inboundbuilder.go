@@ -211,7 +211,7 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 			return nil, fmt.Errorf("marshal dest %s config fialed: %s", dest, err)
 		}
 		streamSetting.Security = "reality"
-                private_key := nodeInfo.PrivateKey
+                private_key := nodeInfo.REALITYConfig.PrivateKey
                 if private_key == "" {
                         private_key = config.REALITYConfigs.PrivateKey
                 }
@@ -224,7 +224,7 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 			MinClientVer: config.REALITYConfigs.MinClientVer,
 			MaxClientVer: config.REALITYConfigs.MaxClientVer,
 			MaxTimeDiff:  config.REALITYConfigs.MaxTimeDiff,
-			ShortIds:     append(config.REALITYConfigs.ShortIds, nodeInfo.ShortId),
+			ShortIds:     append(config.REALITYConfigs.ShortIds, nodeInfo.REALITYConfig.ShortIds...),
 		}
 	}
 

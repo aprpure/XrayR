@@ -38,6 +38,7 @@ type v2ray struct {
 	} `json:"networkSettings"`
         VlessFlow string `json:"flow"`
         TlsSettings struct {
+                ServerPort    string `json:"server_port"`
                 Sni         string `json:"server_name"`
                 PrivateKey  string `json:"private_key"`
                 ShortId     string `json:"short_id"`
