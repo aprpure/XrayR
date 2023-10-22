@@ -1,5 +1,5 @@
 {
-  "domainStrategy": "IPOnDemand",
+  "domainStrategy": "IPIfNonMatch",
   "rules": [
     {
       "type": "field",
@@ -16,16 +16,18 @@
       ]
     },
     {
-      "type": "field",
-      "outboundTag": "socks5-warp",
-      "domain": []
+      "domain": [
+        "geosite:cn"
+      ],
+      "outboundTag": "block",
+      "type": "field"
     },
     {
-      "type": "field",
-      "outboundTag": "IPv6_out",
-      "domain": [
-        "geosite:netflix"
-      ]
+      "ip": [
+        "geoip:cn"
+      ],
+      "outboundTag": "block",
+      "type": "field"
     },
     {
       "type": "field",
