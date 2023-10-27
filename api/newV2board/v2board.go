@@ -344,8 +344,9 @@ func (c *APIClient) ReportNodeOnlineUsers(onlineUserList *[]api.OnlineUser) erro
         path := "/api/v1/server/UniProxy/alive"
         res, err := c.client.R().SetBody(data).ForceContentType("application/json").Post(path)
 	_, err = c.parseResponse(res, path, err)
+        // 面板无对应接口时先不报错
 	if err != nil {
-		return err
+		return nil
 	}
 
 	return nil
