@@ -144,7 +144,7 @@ func (c *Controller) Start() error {
 	)
 
 	// Check cert service in need
-	if c.nodeInfo.EnableTLS && c.config.EnableREALITY == false {
+	if c.nodeInfo.EnableTLS && !c.config.EnableREALITY {
 		c.tasks = append(c.tasks, periodicTask{
 			tag: "cert monitor",
 			Periodic: &task.Periodic{
@@ -562,6 +562,7 @@ func (c *Controller) userInfoMonitor() (err error) {
 			log.Print(err)
 		}
 	}
+
 	if len(userTraffic) > 0 {
 		var err error // Define an empty error
 		if !c.config.DisableUploadTraffic {
@@ -579,10 +580,25 @@ func (c *Controller) userInfoMonitor() (err error) {
 	if onlineDevice, err := c.GetOnlineDevice(c.Tag); err != nil {
 		log.Print(err)
 	} else if len(*onlineDevice) > 0 {
-		if err = c.apiClient.ReportNodeOnlineUsers(onlineDevice); err != nil {
+		// Only report user has traffic > 100kb to allow ping test
+		var result []api.OnlineUser
+		var nocountUID = make(map[int]struct{})
+		for _, traffic := range userTraffic {
+			total := traffic.Upload + traffic.Download
+			if total < 100000 {
+				nocountUID[traffic.UID] = struct{}{}
+			}
+		}
+		for _, online := range *onlineDevice {
+			if _, ok := nocountUID[online.UID]; !ok {
+				result = append(result, online)
+			}
+		}
+
+		if err = c.apiClient.ReportNodeOnlineUsers(&result); err != nil {
 			log.Print(err)
 		} else {
-			log.Printf("%s Report %d online users", c.logPrefix(), len(*onlineDevice))
+			log.Printf("%s Total %d online users, %d Reported", c.logPrefix(), len(*onlineDevice), len(result))
 		}
 	}
 
@@ -610,7 +626,7 @@ func (c *Controller) logPrefix() string {
 
 // Check Cert
 func (c *Controller) certMonitor() error {
-	if c.nodeInfo.EnableTLS && c.config.EnableREALITY == false {
+	if c.nodeInfo.EnableTLS && !c.config.EnableREALITY {
 		switch c.config.CertConfig.CertMode {
 		case "dns", "http", "tls":
 			lego, err := mylego.New(c.config.CertConfig)
