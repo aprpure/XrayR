@@ -34,15 +34,15 @@ type v2ray struct {
 		Headers     *json.RawMessage `json:"headers"`
 		ServiceName string           `json:"serviceName"`
 		Header      *json.RawMessage `json:"header"`
-                Host        string           `json:"host"`
+		Host        string           `json:"host"`
 	} `json:"networkSettings"`
-        VlessFlow string `json:"flow"`
-        TlsSettings struct {
-                ServerPort    string `json:"server_port"`
-                Sni         string `json:"server_name"`
-                PrivateKey  string `json:"private_key"`
-                ShortId     string `json:"short_id"`
-        } `json:"tls_settings"`
+	VlessFlow   string `json:"flow"`
+	TlsSettings struct {
+		ServerPort string `json:"server_port"`
+		Sni        string `json:"server_name"`
+		PrivateKey string `json:"private_key"`
+		ShortId    string `json:"short_id"`
+	} `json:"tls_settings"`
 	Tls int `json:"tls"`
 }
 
@@ -59,9 +59,9 @@ type route struct {
 }
 
 type user struct {
-	Id         int    `json:"id"`
-	Uuid       string `json:"uuid"`
-	SpeedLimit int    `json:"speed_limit"`
-        DeviceLimit int   `json:"device_limit"`
-        AliveIp    int    `json:"alive_ip"`
+	Id          int    `json:"id"`
+	Uuid        string `json:"uuid"`
+	SpeedLimit  int    `json:"speed_limit"`
+	DeviceLimit int    `json:"device_limit"`
+	AliveIp     int    `json:"alive_ip"`
 }
