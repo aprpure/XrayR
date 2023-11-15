@@ -75,10 +75,6 @@ A Xray backend framework that can easily support many panels.
 wget -N https://raw.githubusercontent.com/wyx2685/XrayR-release/master/install.sh && bash install.sh
 ```
 
-### 使用Docker部署软件
-
-[Docker部署教程](https://xrayr-project.github.io/XrayR-doc/xrayr-xia-zai-he-an-zhuang/install/docker)
-
 ### 手动安装
 
 [手动安装教程](https://xrayr-project.github.io/XrayR-doc/xrayr-xia-zai-he-an-zhuang/install/manual)

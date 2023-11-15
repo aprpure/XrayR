@@ -70,9 +70,6 @@ Dự án này chỉ là học tập và phát triển và bảo trì cá nhân c
 wget -N https://raw.githubusercontent.com/wyx2685/XrayR-release/master/install.sh && bash install.sh
 ```
 
-### Sử dụng phần mềm triển khai Docker
-
-[Hướng dẫn cài đặt thông qua Docker](https://xrayr-project.github.io/XrayR-doc/xrayr-xia-zai-he-an-zhuang/install/docker)
 
 ### Hướng dẫn cài đặt
 

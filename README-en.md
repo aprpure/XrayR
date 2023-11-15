@@ -73,9 +73,6 @@ This project is just my personal learning and development and maintenance. I do 
 wget -N https://raw.githubusercontent.com/wyx2685/XrayR-release/master/install.sh && bash install.sh
 ```
 
-### Docker
-
-[Docker deployment tutorial](https://xrayr-project.github.io/XrayR-doc/xrayr-xia-zai-he-an-zhuang/install/docker)
 
 ### Manual installation
 
