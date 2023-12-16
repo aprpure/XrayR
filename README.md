@@ -58,6 +58,7 @@ A Xray backend framework that can easily support many panels.
 
 ## 支持前端
 
+
 | 前端                                                     | vmess | vless | trojan | shadowsocks |
 |--------------------------------------------------------|-------|-------|--------|-------------------------|
 | sspanel-uim                                            | √     | √     | √      | √ (单端口多用户和V2ray-Plugin) |
@@ -66,6 +67,7 @@ A Xray backend framework that can easily support many panels.
 | [ProxyPanel](https://github.com/ProxyPanel/ProxyPanel) | √     | √     | √      | √                       |
 | [WHMCS (V2RaySocks)](https://v2raysocks.doxtex.com/)   | √     | √     | √      | √                       |
 | [GoV2Panel](https://github.com/pingProMax/gov2panel)   | √     | √     | √      | √                       |
+| [BunPanel](https://github.com/pennyMorant/bunpanel-release)   | √     | √     | √      | √                       |
 
 ## 软件安装
 

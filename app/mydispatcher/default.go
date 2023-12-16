@@ -4,7 +4,7 @@ package mydispatcher
 
 import (
 	"context"
-        "fmt"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -143,7 +143,6 @@ func (*DefaultDispatcher) Start() error {
 func (*DefaultDispatcher) Close() error {
 	return nil
 }
-
 
 func (d *DefaultDispatcher) getLink(ctx context.Context) (*transport.Link, *transport.Link, error) {
 	opt := pipe.OptionsFromContext(ctx)
@@ -325,15 +324,15 @@ func (d *DefaultDispatcher) DispatchLink(ctx context.Context, destination net.De
 				domain := result.Domain()
 				newError("sniffed domain: ", domain).WriteToLog(session.ExportIDToError(ctx))
 				destination.Address = net.ParseAddress(domain)
-			        protocol := result.Protocol()
-			        if resComp, ok := result.(SnifferResultComposite); ok {
-				        protocol = resComp.ProtocolForDomainResult()
-			        }
-			        isFakeIP := false
-			        if fkr0, ok := d.fdns.(dns.FakeDNSEngineRev0); ok && ob.Target.Address.Family().IsIP() && fkr0.IsIPInIPPool(ob.Target.Address) {
-				        isFakeIP = true
-			        }
-			        if sniffingRequest.RouteOnly && protocol != "fakedns" && protocol != "fakedns+others" && !isFakeIP {
+				protocol := result.Protocol()
+				if resComp, ok := result.(SnifferResultComposite); ok {
+					protocol = resComp.ProtocolForDomainResult()
+				}
+				isFakeIP := false
+				if fkr0, ok := d.fdns.(dns.FakeDNSEngineRev0); ok && ob.Target.Address.Family().IsIP() && fkr0.IsIPInIPPool(ob.Target.Address) {
+					isFakeIP = true
+				}
+				if sniffingRequest.RouteOnly && protocol != "fakedns" && protocol != "fakedns+others" && !isFakeIP {
 					ob.RouteTarget = destination
 				} else {
 					ob.Target = destination

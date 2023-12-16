@@ -2,13 +2,13 @@ package panel
 
 import (
 	"encoding/json"
+	"github.com/wyx2685/XrayR/api/bunpanel"
+	"github.com/wyx2685/XrayR/api/gov2panel"
+	"github.com/wyx2685/XrayR/api/newV2board"
+	"github.com/wyx2685/XrayR/app/mydispatcher"
 	"log"
 	"os"
 	"sync"
-
-        "github.com/wyx2685/XrayR/api/gov2panel"
-	"github.com/wyx2685/XrayR/api/newV2board"
-	"github.com/wyx2685/XrayR/app/mydispatcher"
 
 	"dario.cat/mergo"
 	"github.com/r3labs/diff/v2"
@@ -187,6 +187,8 @@ func (p *Panel) Start() {
 			apiClient = v2raysocks.New(nodeConfig.ApiConfig)
 		case "GoV2Panel":
 			apiClient = gov2panel.New(nodeConfig.ApiConfig)
+		case "BunPanel":
+			apiClient = bunpanel.New(nodeConfig.ApiConfig)
 		default:
 			log.Panicf("Unsupport panel type: %s", nodeConfig.PanelType)
 		}
