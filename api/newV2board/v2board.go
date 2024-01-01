@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/go-resty/resty/v2"
@@ -511,10 +512,10 @@ func (c *APIClient) parseV2rayNodeResponse(s *serverConfig) (*api.NodeInfo, erro
 		Host:              host,
 		EnableVless:       c.EnableVless,
 		VlessFlow:         s.VlessFlow,
-		REALITYConfig:     &realityconfig,
-		EnableREALITY:     enableREALITY,
 		ServiceName:       s.NetworkSettings.ServiceName,
 		Header:            header,
+		EnableREALITY:     enableREALITY,
+		REALITYConfig:     &realityconfig,
 		NameServerConfig:  s.parseDNSConfig(),
 	}, nil
 }
