@@ -723,8 +723,6 @@ github.com/r3labs/diff/v2 v2.15.1 h1:EOrVqPUzi+njlumoqJwiS/TgGgmZo83619FNDB9xQUg
 github.com/r3labs/diff/v2 v2.15.1/go.mod h1:I8noH9Fc2fjSaMxqF3G2lhDdC0b+JXCfyx85tWFM9kc=
 github.com/redis/go-redis/v9 v9.3.1 h1:KqdY8U+3X6z+iACvumCNxnoluToB+9Me+TvyFa21Mds=
 github.com/redis/go-redis/v9 v9.3.1/go.mod h1:hdY0cQFCN4fnSYT6TkisLufl/4W5UIXyv0b/CLO2V2M=
-github.com/refraction-networking/utls v1.6.1 h1:n1JG5karzdGWsI6iZmGrOv3SNzR4c+4M8J6KWGsk3lA=
-github.com/refraction-networking/utls v1.6.1/go.mod h1:+EbcQOvQvXoFV9AEKbuGlljt1doLRKAVY1jJHe9EtDo=
 github.com/refraction-networking/utls v1.6.2 h1:iTeeGY0o6nMNcGyirxkD5bFIsVctP5InGZ3E0HrzS7k=
 github.com/refraction-networking/utls v1.6.2/go.mod h1:yil9+7qSl+gBwJqztoQseO6Pr3h62pQoY1lXiNR/FPs=
 github.com/riobard/go-bloom v0.0.0-20200614022211-cdc8013cb5b3 h1:f/FNXud6gA3MNr8meMVVGxhp+QBTqY91tM8HjEuMjGg=
@@ -900,8 +898,6 @@ github.com/xeipuuv/gojsonschema v1.2.0/go.mod h1:anYRn/JVcOK2ZgGU+IjEV4nwlhoK5sQ
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/xtls/reality v0.0.0-20231112171332-de1173cf2b19 h1:capMfFYRgH9BCLd6A3Er/cH3A9Nz3CU2KwxwOQZIePI=
 github.com/xtls/reality v0.0.0-20231112171332-de1173cf2b19/go.mod h1:dm4y/1QwzjGaK17ofi0Vs6NpKAHegZky8qk6J2JJZAE=
-github.com/xtls/xray-core v1.8.8-0.20240120214034-53de58fad3a0 h1:IfUeBSlGlxy9BachfXhZu1nwNwrwLuuE/ZXjzUB0KeU=
-github.com/xtls/xray-core v1.8.8-0.20240120214034-53de58fad3a0/go.mod h1:gAw8EAQONCedbAfKz3j9kaaCIl1RhE33vIOY2ePecg0=
 github.com/xtls/xray-core v1.8.8-0.20240130153849-813f9a33b7c7 h1:Ek3cRIvc0zJIGSHvffzNbKKbEh4YighdAkQUnbEms+0=
 github.com/xtls/xray-core v1.8.8-0.20240130153849-813f9a33b7c7/go.mod h1:gOJ47dX59atBMrlt5Y6N3qvCe6bwEFU6ajDQflvH3ys=
 github.com/yandex-cloud/go-genproto v0.0.0-20220805142335-27b56ddae16f h1:cG+ehPRJSlqljSufLf1KXeXpUd1dLNjnzA18mZcB/O0=
@@ -1355,8 +1351,7 @@ google.golang.org/grpc v1.33.2/go.mod h1:JMHMWHQWaTccqQQlmk3MJZS+GWXOdAesneDmEnv
 google.golang.org/grpc v1.36.0/go.mod h1:qjiiYl8FncCW8feJPdyg3v6XW24KsRHe+dy9BAGRRjU=
 google.golang.org/grpc v1.40.0/go.mod h1:ogyxbiOoUXAkP+4+xa6PZSE9DZgIHtSpzjDTB9KAK34=
 google.golang.org/grpc v1.41.0/go.mod h1:U3l9uK9J0sini8mHphKoXyaqDA/8VyGnDee1zzIUK6k=
-google.golang.org/grpc v1.60.1 h1:26+wFr+cNqSGFcOXcabYC0lUVJVRa2Sb2ortSK7VrEU=
-google.golang.org/grpc v1.60.1/go.mod h1:OlCHIeLYqSSsLi6i49B5QGdzaMZK9+M7LXN2FKz4eGM=
+google.golang.org/grpc v1.61.0 h1:TOvOcuXn30kRao+gfcvsebNEa5iZIiLkisYEkf7R7o0=
 google.golang.org/grpc v1.61.0/go.mod h1:VUbo7IFqmF1QtCAstipjG0GIoq49KvMe9+h1jFLBNJs=
 google.golang.org/protobuf v0.0.0-20200109180630-ec00e32a8dfd/go.mod h1:DFci5gLYBciE7Vtevhsrf46CRTquxDuWsQurQQe4oz8=
 google.golang.org/protobuf v0.0.0-20200221191635-4d8936d0db64/go.mod h1:kwYJMbMJ01Woi6D6+Kah6886xMZcty6N08ah7+eCXa0=
