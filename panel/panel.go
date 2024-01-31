@@ -2,13 +2,14 @@ package panel
 
 import (
 	"encoding/json"
+	"log"
+	"os"
+	"sync"
+
 	"github.com/wyx2685/XrayR/api/bunpanel"
 	"github.com/wyx2685/XrayR/api/gov2panel"
 	"github.com/wyx2685/XrayR/api/newV2board"
 	"github.com/wyx2685/XrayR/app/mydispatcher"
-	"log"
-	"os"
-	"sync"
 
 	"dario.cat/mergo"
 	"github.com/r3labs/diff/v2"
@@ -96,10 +97,10 @@ func (p *Panel) loadCore(panelConfig *Config) *core.Instance {
 	var coreCustomInboundConfig []conf.InboundDetourConfig
 	if panelConfig.InboundConfigPath != "" {
 		if data, err := os.ReadFile(panelConfig.InboundConfigPath); err != nil {
-			log.Panicf("Failed to read Custom Inbound config file at: %s", panelConfig.OutboundConfigPath)
+			log.Panicf("Failed to read Custom Inbound config file at: %s", panelConfig.InboundConfigPath)
 		} else {
 			if err = json.Unmarshal(data, &coreCustomInboundConfig); err != nil {
-				log.Panicf("Failed to unmarshal Custom Inbound config: %s", panelConfig.OutboundConfigPath)
+				log.Panicf("Failed to unmarshal Custom Inbound config: %s", panelConfig.InboundConfigPath)
 			}
 		}
 	}
