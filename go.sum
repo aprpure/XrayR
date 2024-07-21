@@ -1744,6 +1744,8 @@ github.com/xtls/xray-core v1.8.19 h1:mml7smcO2FM5HyyKdqnf5F2BUvi3br2ldrqmeemEFRE
 github.com/xtls/xray-core v1.8.19/go.mod h1:0CwyMPNA5Cs+ukPXHbYQGgne/ug0PuXOSVqBu7zyXOc=
 github.com/xtls/xray-core v1.8.21-0.20240720172606-57248d34013e h1:kqWViuGYCBLMkIchaA8gaoKcUoy/8Lb5m1b1eETqAmQ=
 github.com/xtls/xray-core v1.8.21-0.20240720172606-57248d34013e/go.mod h1:0CwyMPNA5Cs+ukPXHbYQGgne/ug0PuXOSVqBu7zyXOc=
+github.com/xtls/xray-core v1.8.21-0.20240721085503-22535d864399 h1:oKBzkEXI6eGM7e00mGQPl23Khlj3F0XYdzGwxvb0fdY=
+github.com/xtls/xray-core v1.8.21-0.20240721085503-22535d864399/go.mod h1:0CwyMPNA5Cs+ukPXHbYQGgne/ug0PuXOSVqBu7zyXOc=
 github.com/yalp/jsonpath v0.0.0-20180802001716-5cc68e5049a0 h1:6fRhSjgLCkTD3JnJxvaJ4Sj+TYblw757bqYgZaOq5ZY=
 github.com/yalp/jsonpath v0.0.0-20180802001716-5cc68e5049a0/go.mod h1:/LWChgwKmvncFJFHJ7Gvn9wZArjbV5/FppcK2fKk/tI=
 github.com/yandex-cloud/go-genproto v0.0.0-20240311082839-58e1a7554a75 h1:hkFRBcSOFUNuuORzA5DqvBcoFjH7R0HCIu+mlSSw56U=
