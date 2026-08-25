@@ -12,6 +12,7 @@ import (
 	"github.com/xtls/xray-core/common/protocol"
 	"github.com/xtls/xray-core/common/serial"
 	"github.com/xtls/xray-core/infra/conf"
+	"github.com/xtls/xray-core/proxy/hysteria/account"
 	"github.com/xtls/xray-core/proxy/shadowsocks"
 	"github.com/xtls/xray-core/proxy/shadowsocks_2022"
 	"github.com/xtls/xray-core/proxy/trojan"
@@ -67,6 +68,22 @@ func (c *Controller) buildTrojanUser(userInfo *[]api.UserInfo) (users []*protoco
 			Level:   0,
 			Email:   c.buildUserTag(&user),
 			Account: serial.ToTypedMessage(trojanAccount),
+		}
+	}
+	return users
+}
+
+func (c *Controller) buildHysteriaUser(userInfo *[]api.UserInfo) (users []*protocol.User) {
+	users = make([]*protocol.User, len(*userInfo))
+	for i, user := range *userInfo {
+		// Hysteria auth is a plain string; mirror the panel-side client structure
+		hysteriaAccount := &account.Account{
+			Auth: user.UUID,
+		}
+		users[i] = &protocol.User{
+			Level:   0,
+			Email:   c.buildUserTag(&user),
+			Account: serial.ToTypedMessage(hysteriaAccount),
 		}
 	}
 	return users
@@ -151,7 +168,7 @@ func cipherFromString(c string) shadowsocks.CipherType {
 	case "chacha20-poly1305", "aead_chacha20_poly1305", "chacha20-ietf-poly1305":
 		return shadowsocks.CipherType_CHACHA20_POLY1305
 	case "none", "plain":
-		return shadowsocks.CipherType_NONE
+		return shadowsocks.CipherType_UNKNOWN
 	default:
 		return shadowsocks.CipherType_UNKNOWN
 	}
@@ -162,7 +179,9 @@ func (c *Controller) buildUserTag(user *api.UserInfo) string {
 }
 
 func (c *Controller) checkShadowsocksPassword(password string, method string) (string, error) {
-	if strings.Contains(c.panelType, "V2board") {
+	// Both the V2board fork and Xboard deliver raw UUIDs; both need the
+	// truncate-to-key-size + base64 derivation (same as xbnode buildShadowsocks).
+	if strings.Contains(c.panelType, "V2board") || strings.Contains(c.panelType, "Xboard") {
 		var userKey string
 		if len(password) < 16 {
 			return "", newError("shadowsocks2022 key's length must be greater than 16").AtWarning()

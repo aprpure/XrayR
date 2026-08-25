@@ -8,12 +8,14 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/xtls/xray-core/common/serial"
 	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/infra/conf"
 
 	"github.com/wyx2685/XrayR/api"
 	"github.com/wyx2685/XrayR/api/sspanel"
 	_ "github.com/wyx2685/XrayR/cmd/distro/all"
+	"github.com/wyx2685/XrayR/app/mydispatcher"
 	"github.com/wyx2685/XrayR/common/mylego"
 	. "github.com/wyx2685/XrayR/service/controller"
 )
@@ -30,6 +32,11 @@ func TestController(t *testing.T) {
 	}}
 	serverConfig.Policy = policyConfig
 	config, _ := serverConfig.Build()
+
+	// conf.Config.Build() injects the stock dispatcher.Config as the first app;
+	// replace it with XrayR's mydispatcher (panel.go does the same when building
+	// the production config).
+	config.App[0] = serial.ToTypedMessage(&mydispatcher.Config{})
 
 	// config := &core.Config{
 	// 	App: []*serial.TypedMessage{
