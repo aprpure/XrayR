@@ -4,6 +4,9 @@ on:
   release:
     types:
       - published
+permissions:
+  contents: read
+  packages: write
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/xrayr
