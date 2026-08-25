@@ -8,7 +8,9 @@ import (
 type Config struct {
 	ListenIP                  string                           `mapstructure:"ListenIP"`
 	SendIP                    string                           `mapstructure:"SendIP"`
-	UpdatePeriodic            int                              `mapstructure:"UpdatePeriodic"`
+	UpdatePeriodic            int                              `mapstructure:"UpdatePeriodic"` // Deprecated: legacy single interval, used as fallback when PullInterval/PushInterval are unset
+	PullInterval              int                              `mapstructure:"PullInterval"`   // Seconds between node/user config fetches; overrides panel value when > 0
+	PushInterval              int                              `mapstructure:"PushInterval"`   // Seconds between traffic/online reports; overrides panel value when > 0
 	DeviceOnlineMinTraffic    int                              `mapstructure:"DeviceOnlineMinTraffic"`
 	CertConfig                *mylego.CertConfig               `mapstructure:"CertConfig"`
 	EnableDNS                 bool                             `mapstructure:"EnableDNS"`
@@ -17,7 +19,6 @@ type Config struct {
 	DisableGetRule            bool                             `mapstructure:"DisableGetRule"`
 	EnableProxyProtocol       bool                             `mapstructure:"EnableProxyProtocol"`
 	EnableFallback            bool                             `mapstructure:"EnableFallback"`
-	DisableIVCheck            bool                             `mapstructure:"DisableIVCheck"`
 	DisableSniffing           bool                             `mapstructure:"DisableSniffing"`
 	AutoSpeedLimitConfig      *AutoSpeedLimitConfig            `mapstructure:"AutoSpeedLimitConfig"`
 	GlobalDeviceLimitConfig   *limiter.GlobalDeviceLimitConfig `mapstructure:"GlobalDeviceLimitConfig"`
