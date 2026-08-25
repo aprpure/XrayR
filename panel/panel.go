@@ -9,6 +9,7 @@ import (
 	"github.com/wyx2685/XrayR/api/bunpanel"
 	"github.com/wyx2685/XrayR/api/gov2panel"
 	"github.com/wyx2685/XrayR/api/newV2board"
+	"github.com/wyx2685/XrayR/api/xboard"
 	"github.com/wyx2685/XrayR/app/mydispatcher"
 
 	"dario.cat/mergo"
@@ -180,6 +181,8 @@ func (p *Panel) Start() {
 			apiClient = sspanel.New(nodeConfig.ApiConfig)
 		case "NewV2board", "V2board":
 			apiClient = newV2board.New(nodeConfig.ApiConfig)
+		case "Xboard", "NewV2board-Xboard":
+			apiClient = xboard.New(nodeConfig.ApiConfig)
 		case "PMpanel":
 			apiClient = pmpanel.New(nodeConfig.ApiConfig)
 		case "Proxypanel":
