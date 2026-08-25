@@ -78,6 +78,14 @@ type NodeInfo struct {
 	Security            string
 	Key                 string
 	RejectUnknownSni    bool
+	Decryption          string // VLESS server-side decryption (Xboard encryption.decryption)
+	HysteriaVersion     int    // Hysteria protocol version, xray-core supports v2 only
+	UpMbps              int    // Hysteria bandwidth up (Mbps)
+	DownMbps            int    // Hysteria bandwidth down (Mbps)
+	Obfs                string // Hysteria obfs type (salamander)
+	ObfsPassword        string // Hysteria obfs password
+	PushInterval        int    // Panel-defined push interval in seconds (base_config.push_interval)
+	PullInterval        int    // Panel-defined pull interval in seconds (base_config.pull_interval)
 }
 
 type UserInfo struct {

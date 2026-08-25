@@ -407,6 +407,8 @@ func (c *APIClient) parseTrojanNodeResponse(s *serverConfig) (*api.NodeInfo, err
 		Header:            header,
 		ServiceName:       s.NetworkSettings.ServiceName,
 		NameServerConfig:  s.parseDNSConfig(),
+		PushInterval:      s.BaseConfig.PushInterval,
+		PullInterval:      s.BaseConfig.PullInterval,
 	}
 	return nodeInfo, nil
 }
@@ -439,6 +441,8 @@ func (c *APIClient) parseSSNodeResponse(s *serverConfig) (*api.NodeInfo, error) 
 		ServerKey:         s.ServerKey, // shadowsocks2022 share key
 		NameServerConfig:  s.parseDNSConfig(),
 		Header:            header,
+		PushInterval:      s.BaseConfig.PushInterval,
+		PullInterval:      s.BaseConfig.PullInterval,
 	}, nil
 }
 
@@ -519,6 +523,8 @@ func (c *APIClient) parseV2rayNodeResponse(s *serverConfig) (*api.NodeInfo, erro
 		EnableREALITY:     enableREALITY,
 		REALITYConfig:     &realityconfig,
 		NameServerConfig:  s.parseDNSConfig(),
+		PushInterval:      s.BaseConfig.PushInterval,
+		PullInterval:      s.BaseConfig.PullInterval,
 	}, nil
 }
 
