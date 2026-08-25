@@ -76,6 +76,12 @@ func run() error {
 		return fmt.Errorf("Parse config file %v failed: %s \n", cfgFile, err)
 	}
 
+	// LogConfig may be omitted entirely in the config file; apply defaults
+	// so downstream code never sees a nil pointer.
+	if panelConfig.LogConfig == nil {
+		panelConfig.LogConfig = &panel.LogConfig{}
+	}
+
 	if panelConfig.LogConfig.Level == "debug" {
 		log.SetReportCaller(true)
 	}
@@ -94,7 +100,7 @@ func run() error {
 				log.Panicf("Parse config file %v failed: %s \n", cfgFile, err)
 			}
 
-			if panelConfig.LogConfig.Level == "debug" {
+			if panelConfig.LogConfig != nil && panelConfig.LogConfig.Level == "debug" {
 				log.SetReportCaller(true)
 			}
 

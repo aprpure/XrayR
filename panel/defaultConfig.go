@@ -22,9 +22,11 @@ func getDefaultConnectionConfig() *ConnectionConfig {
 
 func getDefaultControllerConfig() *controller.Config {
 	return &controller.Config{
-		ListenIP:       "0.0.0.0",
-		SendIP:         "0.0.0.0",
-		UpdatePeriodic: 60,
-		DNSType:        "AsIs",
+		ListenIP: "0.0.0.0",
+		SendIP:   "0.0.0.0",
+		// UpdatePeriodic intentionally defaults to 0 here: when neither
+		// PullInterval nor PushInterval is configured locally, the panel-provided
+		// base_config intervals take effect (final fallback 60s lives in the controller).
+		DNSType: "AsIs",
 	}
 }
