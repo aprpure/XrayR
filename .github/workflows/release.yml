@@ -99,7 +99,7 @@ jobs:
       CGO_ENABLED: 0
     steps:
       - name: Checkout codebase
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Show workflow information
         id: get_filename
         run: |
@@ -109,9 +109,9 @@ jobs:
           echo "ASSET_NAME=$_NAME" >> $GITHUB_ENV
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: '^1.21'
+          go-version-file: go.mod
 
       - name: Get project dependencies
         run: go mod download
@@ -172,11 +172,11 @@ jobs:
         run: |
           mv build_assets XrayR-$ASSET_NAME
       - name: Upload files to Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: XrayR-${{ steps.get_filename.outputs.ASSET_NAME }}
-          path: |
-            ./XrayR-${{ steps.get_filename.outputs.ASSET_NAME }}/*
+          path: ./XrayR-${{ steps.get_filename.outputs.ASSET_NAME }}/*
+          if-no-files-found: error
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         if: github.event_name == 'release'
