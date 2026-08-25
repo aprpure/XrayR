@@ -74,6 +74,8 @@ func TestBuildSS(t *testing.T) {
 		SpeedLimit:        0,
 		AlterID:           2,
 		TransportProtocol: "tcp",
+		CypherMethod:      "aes-256-gcm",
+		ServerKey:         "test_server_key",
 		Host:              "test.test.tk",
 		Path:              "v2ray",
 		EnableTLS:         false,
@@ -94,5 +96,48 @@ func TestBuildSS(t *testing.T) {
 	_, err := InboundBuilder(config, nodeInfo, "test_tag")
 	if err != nil {
 		t.Error(err)
+	}
+}
+
+func TestBuildHysteria2(t *testing.T) {
+	nodeInfo := &api.NodeInfo{
+		NodeType:          "Hysteria",
+		NodeID:            1,
+		Port:              443,
+		TransportProtocol: "hysteria",
+		HysteriaVersion:   2,
+		UpMbps:            100,
+		DownMbps:          500,
+		Obfs:              "salamander",
+		ObfsPassword:      "obfspass",
+	}
+	certConfig := &mylego.CertConfig{
+		CertMode:   "none",
+		CertDomain: "test.test.tk",
+	}
+	config := &Config{
+		CertConfig: certConfig,
+	}
+	inbound, err := InboundBuilder(config, nodeInfo, "test_tag")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inbound == nil {
+		t.Fatal("inbound is nil")
+	}
+}
+
+func TestBuildHysteria1Rejected(t *testing.T) {
+	nodeInfo := &api.NodeInfo{
+		NodeType:          "Hysteria",
+		NodeID:            1,
+		Port:              443,
+		TransportProtocol: "hysteria",
+		HysteriaVersion:   1,
+		EnableTLS:         true,
+	}
+	config := &Config{CertConfig: &mylego.CertConfig{CertMode: "none"}}
+	if _, err := InboundBuilder(config, nodeInfo, "test_tag"); err == nil {
+		t.Error("expected error for hysteria v1, got nil")
 	}
 }

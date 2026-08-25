@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -47,6 +48,19 @@ type Controller struct {
 	dispatcher   *mydispatcher.DefaultDispatcher
 	startAt      time.Time
 	logger       *log.Entry
+
+	// trafficMu guards pendingTraffic, limitedUsers and warnedUsers, which are
+	// written by the pull-side monitor and read/cleared by the push-side monitor.
+	trafficMu      sync.Mutex
+	pendingTraffic *pendingTraffic
+}
+
+// pendingTraffic carries per-user counters read by the pull side to the push
+// side, which reports them and (on success) resets the underlying xray counters.
+type pendingTraffic struct {
+	userTraffic   []api.UserTraffic
+	upCounters    []stats.Counter
+	downCounters  []stats.Counter
 }
 
 type periodicTask struct {
@@ -90,6 +104,7 @@ func (c *Controller) Start() error {
 	}
 	c.nodeInfo = newNodeInfo
 	c.Tag = c.buildNodeTag()
+	// No lock needed here: periodic tasks have not started yet.
 
 	// Add new tag
 	err = c.addNewTag(newNodeInfo)
@@ -144,19 +159,31 @@ func (c *Controller) Start() error {
 		c.warnedUsers = make(map[api.UserInfo]int)
 	}
 
+	// Resolve pull/push intervals.
+	// Priority: local explicit config > panel-provided base_config > legacy UpdatePeriodic > 60s.
+	pullInterval := firstNonZero(c.config.PullInterval, c.nodeInfo.PullInterval, c.config.UpdatePeriodic, defaultUpdatePeriodic)
+	pushInterval := firstNonZero(c.config.PushInterval, c.nodeInfo.PushInterval, c.config.UpdatePeriodic, defaultUpdatePeriodic)
+	c.logger.Printf("Pull interval: %ds, Push interval: %ds", pullInterval, pushInterval)
+
 	// Add periodic tasks
 	c.tasks = append(c.tasks,
 		periodicTask{
 			tag: "node monitor",
 			Periodic: &task.Periodic{
-				Interval: time.Duration(c.config.UpdatePeriodic) * time.Second,
+				Interval: time.Duration(pullInterval) * time.Second,
 				Execute:  c.nodeInfoMonitor,
 			}},
 		periodicTask{
 			tag: "user monitor",
 			Periodic: &task.Periodic{
-				Interval: time.Duration(c.config.UpdatePeriodic) * time.Second,
+				Interval: time.Duration(pullInterval) * time.Second,
 				Execute:  c.userInfoMonitor,
+			}},
+		periodicTask{
+			tag: "traffic report",
+			Periodic: &task.Periodic{
+				Interval: time.Duration(pushInterval) * time.Second,
+				Execute:  c.pushMonitor,
 			}},
 	)
 
@@ -165,7 +192,7 @@ func (c *Controller) Start() error {
 		c.tasks = append(c.tasks, periodicTask{
 			tag: "cert monitor",
 			Periodic: &task.Periodic{
-				Interval: time.Duration(c.config.UpdatePeriodic) * time.Second * 60,
+				Interval: time.Duration(pullInterval) * time.Second * 60,
 				Execute:  c.certMonitor,
 			}})
 	}
@@ -194,7 +221,7 @@ func (c *Controller) Close() error {
 
 func (c *Controller) nodeInfoMonitor() (err error) {
 	// delay to start
-	if time.Since(c.startAt) < time.Duration(c.config.UpdatePeriodic)*time.Second {
+	if time.Since(c.startAt) < time.Duration(firstNonZero(c.config.PullInterval, defaultUpdatePeriodic))*time.Second {
 		return nil
 	}
 
@@ -253,8 +280,10 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 				return nil
 			}
 			// Add new tag
+			c.trafficMu.Lock()
 			c.nodeInfo = newNodeInfo
 			c.Tag = c.buildNodeTag()
+			c.trafficMu.Unlock()
 			err = c.addNewTag(newNodeInfo)
 			if err != nil {
 				c.logger.Print(err)
@@ -324,7 +353,9 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 		}
 		c.logger.Printf("%d user deleted, %d user added", len(deleted), len(added))
 	}
+	c.trafficMu.Lock()
 	c.userList = newUserInfo
+	c.trafficMu.Unlock()
 	return nil
 }
 
@@ -431,6 +462,8 @@ func (c *Controller) addNewUser(userInfo *[]api.UserInfo, nodeInfo *api.NodeInfo
 		}
 	case "Trojan":
 		users = c.buildTrojanUser(userInfo)
+	case "Hysteria":
+		users = c.buildHysteriaUser(userInfo)
 	case "Shadowsocks":
 		users = c.buildSSUser(userInfo, nodeInfo.CypherMethod)
 	case "Shadowsocks-Plugin":
@@ -485,7 +518,8 @@ func compareUserList(old, new *[]api.UserInfo) (deleted, added []api.UserInfo) {
 	return deleted, added
 }
 
-func limitUser(c *Controller, user api.UserInfo, silentUsers *[]api.UserInfo) {
+// limitUserLocked records a speed-limited user. Callers must hold c.trafficMu.
+func limitUserLocked(c *Controller, user api.UserInfo, silentUsers *[]api.UserInfo) {
 	c.limitedUsers[user] = LimitInfo{
 		end:               time.Now().Unix() + int64(c.config.AutoSpeedLimitConfig.LimitDuration*60),
 		currentSpeedLimit: c.config.AutoSpeedLimitConfig.LimitSpeed,
@@ -496,56 +530,51 @@ func limitUser(c *Controller, user api.UserInfo, silentUsers *[]api.UserInfo) {
 	*silentUsers = append(*silentUsers, user)
 }
 
+// defaultUpdatePeriodic is the final fallback interval when neither the local
+// config nor the panel provides one.
+const defaultUpdatePeriodic = 60
+
+// firstNonZero returns the first value greater than zero.
+func firstNonZero(vals ...int) int {
+	for _, v := range vals {
+		if v > 0 {
+			return v
+		}
+	}
+	return 0
+}
+
+// userInfoMonitor runs on the pull cadence: it reads per-user traffic counters,
+// applies auto speed-limit decisions and stashes the counters as pending traffic
+// for pushMonitor to report and reset.
 func (c *Controller) userInfoMonitor() (err error) {
 	// delay to start
-	if time.Since(c.startAt) < time.Duration(c.config.UpdatePeriodic)*time.Second {
+	if time.Since(c.startAt) < time.Duration(defaultUpdatePeriodic)*time.Second {
 		return nil
 	}
 
-	// Get server status
-	CPU, Mem, Disk, Uptime, err := serverstatus.GetSystemInfo()
-	if err != nil {
-		c.logger.Print(err)
-	}
-	err = c.apiClient.ReportNodeStatus(
-		&api.NodeStatus{
-			CPU:    CPU,
-			Mem:    Mem,
-			Disk:   Disk,
-			Uptime: Uptime,
-		})
-	if err != nil {
-		c.logger.Print(err)
-	}
-	// Unlock users
-	if c.config.AutoSpeedLimitConfig.Limit > 0 && len(c.limitedUsers) > 0 {
-		c.logger.Printf("Limited users:")
-		toReleaseUsers := make([]api.UserInfo, 0)
-		for user, limitInfo := range c.limitedUsers {
-			if time.Now().Unix() > limitInfo.end {
-				user.SpeedLimit = limitInfo.originSpeedLimit
-				toReleaseUsers = append(toReleaseUsers, user)
-				c.logger.Printf("User: %s Speed: %d End: nil (Unlimit)", c.buildUserTag(&user), user.SpeedLimit)
-				delete(c.limitedUsers, user)
-			} else {
-				c.logger.Printf("User: %s Speed: %d End: %s", c.buildUserTag(&user), limitInfo.currentSpeedLimit, time.Unix(c.limitedUsers[user].end, 0).Format("01-02 15:04:05"))
-			}
-		}
-		if len(toReleaseUsers) > 0 {
-			if err := c.UpdateInboundLimiter(c.Tag, &toReleaseUsers); err != nil {
-				c.logger.Print(err)
-			}
-		}
-	}
+	// Unlock expired limited users
+	c.trafficMu.Lock()
+	unlockExpiredLimitsLocked(c)
+	c.trafficMu.Unlock()
+
+	// Snapshot shared state under the same lock the writer uses.
+	c.trafficMu.Lock()
+	nodePullInterval := c.nodeInfo.PullInterval
+	userListSnapshot := *c.userList
+	// Unlock below after building userTraffic; keep critical section small.
+	c.trafficMu.Unlock()
 
 	// Get User traffic
 	var userTraffic []api.UserTraffic
 	var upCounterList []stats.Counter
 	var downCounterList []stats.Counter
 	AutoSpeedLimit := int64(c.config.AutoSpeedLimitConfig.Limit)
-	UpdatePeriodic := int64(c.config.UpdatePeriodic)
+	UpdatePeriodic := int64(firstNonZero(c.config.PullInterval, nodePullInterval, c.config.UpdatePeriodic, defaultUpdatePeriodic))
 	limitedUsers := make([]api.UserInfo, 0)
-	for _, user := range *c.userList {
+
+	c.trafficMu.Lock()
+	for _, user := range userListSnapshot {
 		up, down, upCounter, downCounter := c.getTraffic(c.buildUserTag(&user))
 		if up > 0 || down > 0 {
 			// Over speed users
@@ -553,11 +582,11 @@ func (c *Controller) userInfoMonitor() (err error) {
 				if down > AutoSpeedLimit*1000000*UpdatePeriodic/8 || up > AutoSpeedLimit*1000000*UpdatePeriodic/8 {
 					if _, ok := c.limitedUsers[user]; !ok {
 						if c.config.AutoSpeedLimitConfig.WarnTimes == 0 {
-							limitUser(c, user, &limitedUsers)
+							limitUserLocked(c, user, &limitedUsers)
 						} else {
 							c.warnedUsers[user] += 1
 							if c.warnedUsers[user] > c.config.AutoSpeedLimitConfig.WarnTimes {
-								limitUser(c, user, &limitedUsers)
+								limitUserLocked(c, user, &limitedUsers)
 								delete(c.warnedUsers, user)
 							}
 						}
@@ -582,30 +611,113 @@ func (c *Controller) userInfoMonitor() (err error) {
 			delete(c.warnedUsers, user)
 		}
 	}
+
+	// Hand the read counters over to the push side. Replace any stale batch:
+	// xray counters are only reset after a successful report, so a fresh
+	// reading is always a superset of a pending one — merging would double-count.
+	if len(userTraffic) > 0 {
+		c.pendingTraffic = &pendingTraffic{
+			userTraffic:  userTraffic,
+			upCounters:   upCounterList,
+			downCounters: downCounterList,
+		}
+	}
+	tag := c.Tag
+	c.trafficMu.Unlock()
+
 	if len(limitedUsers) > 0 {
-		if err := c.UpdateInboundLimiter(c.Tag, &limitedUsers); err != nil {
+		if err := c.UpdateInboundLimiter(tag, &limitedUsers); err != nil {
 			c.logger.Print(err)
 		}
 	}
 
-	if len(userTraffic) > 0 {
-		var err error // Define an empty error
-		if !c.config.DisableUploadTraffic {
-			err = c.apiClient.ReportUserTraffic(&userTraffic)
+	return nil
+}
+
+// unlockExpiredLimitsLocked releases users whose auto-limit duration expired.
+// Callers must hold c.trafficMu.
+func unlockExpiredLimitsLocked(c *Controller) {
+	if c.config.AutoSpeedLimitConfig.Limit > 0 && len(c.limitedUsers) > 0 {
+		c.logger.Printf("Limited users:")
+		toReleaseUsers := make([]api.UserInfo, 0)
+		for user, limitInfo := range c.limitedUsers {
+			if time.Now().Unix() > limitInfo.end {
+				user.SpeedLimit = limitInfo.originSpeedLimit
+				toReleaseUsers = append(toReleaseUsers, user)
+				c.logger.Printf("User: %s Speed: %d End: nil (Unlimit)", c.buildUserTag(&user), user.SpeedLimit)
+				delete(c.limitedUsers, user)
+			} else {
+				c.logger.Printf("User: %s Speed: %d End: %s", c.buildUserTag(&user), limitInfo.currentSpeedLimit, time.Unix(c.limitedUsers[user].end, 0).Format("01-02 15:04:05"))
+			}
 		}
-		// If report traffic error, not clear the traffic
-		if err != nil {
-			c.logger.Print(err)
+		if len(toReleaseUsers) > 0 {
+			// UpdateInboundLimiter only touches the dispatcher limiter maps,
+			// not controller state guarded by trafficMu.
+			if err := c.UpdateInboundLimiter(c.Tag, &toReleaseUsers); err != nil {
+				c.logger.Print(err)
+			}
+		}
+	}
+}
+
+// pushMonitor runs on the push cadence: reports node status, pending per-user
+// traffic (resetting xray counters only after a successful report), online
+// devices and audit-rule hits to the panel.
+func (c *Controller) pushMonitor() (err error) {
+	// delay to start
+	if time.Since(c.startAt) < time.Duration(defaultUpdatePeriodic)*time.Second {
+		return nil
+	}
+
+	// Snapshot the tag once; nodeInfoMonitor may replace it concurrently.
+	c.trafficMu.Lock()
+	tag := c.Tag
+	c.trafficMu.Unlock()
+
+	// Get server status
+	CPU, Mem, Disk, Uptime, err := serverstatus.GetSystemInfo()
+	if err != nil {
+		c.logger.Print(err)
+	}
+	err = c.apiClient.ReportNodeStatus(
+		&api.NodeStatus{
+			CPU:    CPU,
+			Mem:    Mem,
+			Disk:   Disk,
+			Uptime: Uptime,
+		})
+	if err != nil {
+		c.logger.Print(err)
+	}
+
+	// Take pending traffic collected by the pull side
+	c.trafficMu.Lock()
+	batch := c.pendingTraffic
+	c.pendingTraffic = nil
+	c.trafficMu.Unlock()
+
+	var userTraffic []api.UserTraffic
+	if batch != nil && len(batch.userTraffic) > 0 {
+		userTraffic = batch.userTraffic
+		var reportErr error // Define an empty error
+		if !c.config.DisableUploadTraffic {
+			reportErr = c.apiClient.ReportUserTraffic(&userTraffic)
+		}
+		if reportErr != nil {
+			// Discard the batch: counters were NOT reset, so the next pull-side
+			// reading is cumulative and contains this traffic. Restoring stale
+			// counter references would under-report the growth since snapshot.
+			c.logger.Print(reportErr)
 		} else {
-			c.resetTraffic(&upCounterList, &downCounterList)
+			c.resetTraffic(&batch.upCounters, &batch.downCounters)
 		}
 	}
 
 	// Report Online info
-	if onlineDevice, err := c.GetOnlineDevice(c.Tag); err != nil {
+	if onlineDevice, err := c.GetOnlineDevice(tag); err != nil {
 		c.logger.Print(err)
 	} else if len(*onlineDevice) > 0 {
-		// Only report user has traffic > 100kb to allow ping test
+		// Only report user has traffic > threshold to allow ping test
 		var result []api.OnlineUser
 		var nocountUID = make(map[int]struct{})
 		for _, traffic := range userTraffic {
@@ -628,7 +740,7 @@ func (c *Controller) userInfoMonitor() (err error) {
 	}
 
 	// Report Illegal user
-	if detectResult, err := c.GetDetectResult(c.Tag); err != nil {
+	if detectResult, err := c.GetDetectResult(tag); err != nil {
 		c.logger.Print(err)
 	} else if len(*detectResult) > 0 {
 		if err = c.apiClient.ReportIllegal(detectResult); err != nil {
@@ -651,7 +763,10 @@ func (c *Controller) buildNodeTag() string {
 
 // Check Cert
 func (c *Controller) certMonitor() error {
-	if c.nodeInfo.EnableTLS && !c.config.EnableREALITY {
+	c.trafficMu.Lock()
+	enableTLS := c.nodeInfo.EnableTLS
+	c.trafficMu.Unlock()
+	if enableTLS && !c.config.EnableREALITY {
 		switch c.config.CertConfig.CertMode {
 		case "dns", "http", "tls":
 			lego, err := mylego.New(c.config.CertConfig)

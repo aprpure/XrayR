@@ -41,7 +41,7 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 	// SniffingConfig
 	sniffingConfig := &conf.SniffingConfig{
 		Enabled:      true,
-		DestOverride: &conf.StringList{"http", "tls", "quic", "fakedns"},
+		DestOverride: conf.StringList{"http", "tls", "quic", "fakedns"},
 	}
 	if config.DisableSniffing {
 		sniffingConfig.Enabled = false
@@ -53,7 +53,6 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		streamSetting *conf.StreamConfig
 		setting       json.RawMessage
 	)
-
 	var proxySetting any
 	// Build Protocol and Protocol setting
 	switch nodeInfo.NodeType {
@@ -119,11 +118,16 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		}
 
 		proxySetting.NetworkList = &conf.NetworkList{"tcp", "udp"}
-		proxySetting.IVCheck = true
-		if config.DisableIVCheck {
-			proxySetting.IVCheck = false
-		}
 
+	case "Hysteria":
+		// xray-core only implements hysteria v2
+		if nodeInfo.HysteriaVersion != 2 {
+			return nil, fmt.Errorf("xray-core only supports hysteria v2, got version %d", nodeInfo.HysteriaVersion)
+		}
+		protocol = "hysteria"
+		proxySetting = &conf.HysteriaServerConfig{
+			Version: 2,
+		}
 	case "dokodemo-door":
 		protocol = "dokodemo-door"
 		proxySetting = struct {
@@ -191,6 +195,43 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		streamSetting.SplitHTTPSettings = splithttpSetting
 	}
 	streamSetting.Network = &transportProtocol
+
+	// Hysteria(v2) runs over its own QUIC-based transport; configure
+	// hysteriaSettings + finalmask quicParams (brutal bandwidth) + salamander obfs here.
+	if nodeInfo.NodeType == "Hysteria" {
+		streamSetting.HysteriaSettings = &conf.HysteriaConfig{
+			Version:        2,
+			UdpIdleTimeout: 60,
+		}
+
+		finalMask := &conf.FinalMask{}
+		if nodeInfo.UpMbps > 0 || nodeInfo.DownMbps > 0 {
+			quicParams := &conf.QuicParamsConfig{}
+			if nodeInfo.UpMbps > 0 {
+				quicParams.BrutalUp = conf.Bandwidth(fmt.Sprintf("%d mbps", nodeInfo.UpMbps))
+			}
+			if nodeInfo.DownMbps > 0 {
+				quicParams.BrutalDown = conf.Bandwidth(fmt.Sprintf("%d mbps", nodeInfo.DownMbps))
+			}
+			finalMask.QuicParams = quicParams
+		}
+
+		if nodeInfo.Obfs != "" && nodeInfo.ObfsPassword != "" {
+			obfsSettings := map[string]string{"password": nodeInfo.ObfsPassword}
+			raw, err := json.Marshal(obfsSettings)
+			if err != nil {
+				return nil, fmt.Errorf("marshal hysteria obfs settings failed: %s", err)
+			}
+			finalMask.Udp = append(finalMask.Udp, conf.Mask{
+				Type:     nodeInfo.Obfs, // "salamander"
+				Settings: (*json.RawMessage)(&raw),
+			})
+		}
+
+		if finalMask.QuicParams != nil || len(finalMask.Udp) > 0 {
+			streamSetting.FinalMask = finalMask
+		}
+	}
 
 	// Build TLS and REALITY settings
 	var isREALITY bool

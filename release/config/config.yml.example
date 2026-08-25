@@ -28,7 +28,9 @@ Nodes:
     ControllerConfig:
       ListenIP: 0.0.0.0 # IP address you want to listen
       SendIP: 0.0.0.0 # IP address you want to send pacakage
-      UpdatePeriodic: 60 # Time to update the nodeinfo, how many sec.
+      PullInterval: 0 # Seconds between node/user config fetches. Overrides panel value when > 0
+      PushInterval: 0 # Seconds between traffic/online reports. Overrides panel value when > 0
+      UpdatePeriodic: 60 # Deprecated legacy single interval; used as fallback only when both above are unset
       DeviceOnlineMinTraffic: 100 # V2board面板设备数限制统计阈值，大于此流量时上报设备数在线，单位kB，不填则默认上报
       EnableDNS: false # Use custom DNS config, Please ensure that you set the dns.json well
       DNSType: AsIs # AsIs, UseIP, UseIPv4, UseIPv6, DNS strategy
@@ -94,7 +96,9 @@ Nodes:
 #    ControllerConfig:
 #      ListenIP: 0.0.0.0 # IP address you want to listen
 #      SendIP: 0.0.0.0 # IP address you want to send pacakage
-#      UpdatePeriodic: 60 # Time to update the nodeinfo, how many sec.
+#      PullInterval: 0 # Seconds between node/user config fetches. Overrides panel value when > 0
+      PushInterval: 0 # Seconds between traffic/online reports. Overrides panel value when > 0
+      UpdatePeriodic: 60 # Deprecated legacy single interval; used as fallback only when both above are unset
 #      EnableDNS: false # Use custom DNS config, Please ensure that you set the dns.json well
 #      DNSType: AsIs # AsIs, UseIP, UseIPv4, UseIPv6, DNS strategy
 #      EnableProxyProtocol: false # Only works for WebSocket and TCP
