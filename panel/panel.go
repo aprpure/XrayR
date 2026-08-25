@@ -6,11 +6,11 @@ import (
 	"os"
 	"sync"
 
-	"github.com/wyx2685/XrayR/api/bunpanel"
-	"github.com/wyx2685/XrayR/api/gov2panel"
-	"github.com/wyx2685/XrayR/api/newV2board"
-	"github.com/wyx2685/XrayR/api/xboard"
-	"github.com/wyx2685/XrayR/app/mydispatcher"
+	"github.com/aprpure/XrayR/api/bunpanel"
+	"github.com/aprpure/XrayR/api/gov2panel"
+	"github.com/aprpure/XrayR/api/newV2board"
+	"github.com/aprpure/XrayR/api/xboard"
+	"github.com/aprpure/XrayR/app/mydispatcher"
 
 	"dario.cat/mergo"
 	"github.com/r3labs/diff/v2"
@@ -20,14 +20,14 @@ import (
 	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/infra/conf"
 
-	"github.com/wyx2685/XrayR/api"
-	"github.com/wyx2685/XrayR/api/pmpanel"
-	"github.com/wyx2685/XrayR/api/proxypanel"
-	"github.com/wyx2685/XrayR/api/sspanel"
-	"github.com/wyx2685/XrayR/api/v2raysocks"
-	_ "github.com/wyx2685/XrayR/cmd/distro/all"
-	"github.com/wyx2685/XrayR/service"
-	"github.com/wyx2685/XrayR/service/controller"
+	"github.com/aprpure/XrayR/api"
+	"github.com/aprpure/XrayR/api/pmpanel"
+	"github.com/aprpure/XrayR/api/proxypanel"
+	"github.com/aprpure/XrayR/api/sspanel"
+	"github.com/aprpure/XrayR/api/v2raysocks"
+	_ "github.com/aprpure/XrayR/cmd/distro/all"
+	"github.com/aprpure/XrayR/service"
+	"github.com/aprpure/XrayR/service/controller"
 )
 
 // Panel Structure

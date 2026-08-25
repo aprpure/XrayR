@@ -11,7 +11,7 @@ import (
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/infra/conf"
 
-	"github.com/wyx2685/XrayR/api"
+	"github.com/aprpure/XrayR/api"
 )
 
 // GetNodeInfo will pull NodeInfo Config from panel
