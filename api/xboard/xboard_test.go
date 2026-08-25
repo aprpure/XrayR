@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wyx2685/XrayR/api"
-	"github.com/wyx2685/XrayR/api/xboard"
+	"github.com/aprpure/XrayR/api"
+	"github.com/aprpure/XrayR/api/xboard"
 )
 
 // mockPanel emulates the Xboard panel endpoints used by the client.

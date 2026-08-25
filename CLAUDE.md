@@ -30,7 +30,7 @@ Startup flow: `main.go` → `cmd.Execute()` (cobra) → viper unmarshals `config
 
 ### Core wiring
 
-`panel/panel.go` builds an `xray-core` `core.Config` directly (not from JSON): log/dns/route configs are read from external JSON files if configured, plus **the custom `mydispatcher` is registered instead of the stock xray dispatcher**. This happens via blank imports of `cmd/distro/all` (`panel.go` and tests import it), which pulls in all xray-core proxies/transports and `_ "github.com/wyx2685/XrayR/app/mydispatcher"`. The dispatcher's `init()` registers itself for `mydispatcher.Config`, so `core.New()` instantiates it as the routing.Dispatcher feature.
+`panel/panel.go` builds an `xray-core` `core.Config` directly (not from JSON): log/dns/route configs are read from external JSON files if configured, plus **the custom `mydispatcher` is registered instead of the stock xray dispatcher**. This happens via blank imports of `cmd/distro/all` (`panel.go` and tests import it), which pulls in all xray-core proxies/transports and `_ "github.com/aprpure/XrayR/app/mydispatcher"`. The dispatcher's `init()` registers itself for `mydispatcher.Config`, so `core.New()` instantiates it as the routing.Dispatcher feature.
 
 ### Per-node flow
 

@@ -3,9 +3,9 @@ package controller_test
 import (
 	"testing"
 
-	"github.com/wyx2685/XrayR/api"
-	"github.com/wyx2685/XrayR/common/mylego"
-	. "github.com/wyx2685/XrayR/service/controller"
+	"github.com/aprpure/XrayR/api"
+	"github.com/aprpure/XrayR/common/mylego"
+	. "github.com/aprpure/XrayR/service/controller"
 )
 
 func TestBuildV2ray(t *testing.T) {

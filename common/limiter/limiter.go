@@ -17,7 +17,7 @@ import (
 	goCache "github.com/patrickmn/go-cache"
 	"github.com/redis/go-redis/v9"
 	log "github.com/sirupsen/logrus"
-	"github.com/wyx2685/XrayR/api"
+	"github.com/aprpure/XrayR/api"
 	"golang.org/x/time/rate"
 )
 
