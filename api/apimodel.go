@@ -2,15 +2,18 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"regexp"
 
 	"github.com/xtls/xray-core/infra/conf"
 )
 
-const (
-	UserNotModified = "users not modified"
-	NodeNotModified = "node not modified"
-	RuleNotModified = "rules not modified"
+// Sentinel errors returned by panel clients when a resource is unchanged
+// (HTTP 304). Controllers match them with errors.Is.
+var (
+	ErrUserNotModified = errors.New("users not modified")
+	ErrNodeNotModified = errors.New("node not modified")
+	ErrRuleNotModified = errors.New("rules not modified")
 )
 
 // Config API config

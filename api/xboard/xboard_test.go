@@ -1,6 +1,7 @@
 package xboard_test
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -201,7 +202,7 @@ func TestGetNodeInfoFallbackToV1(t *testing.T) {
 
 	// Config polling after fallback must hit V1 directly (no more V2 attempts).
 	v2Before := panel.configV2Calls
-	if _, err := client.GetNodeInfo(); err == nil || err.Error() != api.NodeNotModified {
+	if _, err := client.GetNodeInfo(); !errors.Is(err, api.ErrNodeNotModified) {
 		// mock returns fresh body; either outcome is fine as long as no V2 call was made
 		_ = err
 	}
@@ -250,8 +251,8 @@ func TestETagNotModified(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := client.GetNodeInfo()
-	if err == nil || err.Error() != api.NodeNotModified {
-		t.Errorf("second GetNodeInfo err = %v, want NodeNotModified", err)
+	if !errors.Is(err, api.ErrNodeNotModified) {
+		t.Errorf("second GetNodeInfo err = %v, want ErrNodeNotModified", err)
 	}
 
 	if _, err := client.GetUserList(); err != nil {
@@ -389,7 +390,6 @@ func TestEnableVlessLocalSwitch(t *testing.T) {
 		t.Error("expected error: local switch on but panel serves vmess node")
 	}
 }
-
 
 func TestBaseConfigIntervals(t *testing.T) {
 	panel := &mockPanel{v2Enabled: true, configBody: vlessConfigJSON, userBody: usersJSON}

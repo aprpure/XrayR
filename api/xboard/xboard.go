@@ -106,33 +106,37 @@ func New(apiConfig *api.Config) *APIClient {
 	return apiClient
 }
 
-// readLocalRuleList reads the local rule list file
+// readLocalRuleList reads the local rule list file, one regexp per line.
+// Bad lines are logged and skipped; a single invalid rule must not kill the
+// process (regexp.MustCompile would panic).
 func readLocalRuleList(path string) (LocalRuleList []api.DetectRule) {
 	LocalRuleList = make([]api.DetectRule, 0)
 
-	if path != "" {
-		// open the file
-		file, err := os.Open(path)
-		// handle errors while opening
-		if err != nil {
-			log.Printf("Error when opening file: %s", err)
-			return LocalRuleList
-		}
-		defer file.Close()
-		fileScanner := bufio.NewScanner(file)
+	if path == "" {
+		return LocalRuleList
+	}
 
-		// read line by line
-		for fileScanner.Scan() {
-			LocalRuleList = append(LocalRuleList, api.DetectRule{
-				ID:      -1,
-				Pattern: regexp.MustCompile(fileScanner.Text()),
-			})
+	file, err := os.Open(path)
+	if err != nil {
+		log.Printf("Error when opening file: %s", err)
+		return LocalRuleList
+	}
+	defer file.Close()
+
+	fileScanner := bufio.NewScanner(file)
+	for fileScanner.Scan() {
+		pattern, err := regexp.Compile(fileScanner.Text())
+		if err != nil {
+			log.Printf("Skipping invalid rule %q: %s", fileScanner.Text(), err)
+			continue
 		}
-		// handle first encountered error while reading
-		if fileScanner.Err() != nil {
-			log.Fatalf("Error while reading file: %s", fileScanner.Err())
-			return
-		}
+		LocalRuleList = append(LocalRuleList, api.DetectRule{
+			ID:      -1,
+			Pattern: pattern,
+		})
+	}
+	if err := fileScanner.Err(); err != nil {
+		log.Printf("Error while reading file: %s", err)
 	}
 
 	return LocalRuleList

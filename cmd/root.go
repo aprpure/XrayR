@@ -71,15 +71,9 @@ func run() error {
 	showVersion()
 
 	config := getConfig()
-	panelConfig := &panel.Config{}
-	if err := config.Unmarshal(panelConfig); err != nil {
-		return fmt.Errorf("Parse config file %v failed: %s \n", cfgFile, err)
-	}
-
-	// LogConfig may be omitted entirely in the config file; apply defaults
-	// so downstream code never sees a nil pointer.
-	if panelConfig.LogConfig == nil {
-		panelConfig.LogConfig = &panel.LogConfig{}
+	panelConfig, err := loadPanelConfig(config)
+	if err != nil {
+		return err
 	}
 
 	if panelConfig.LogConfig.Level == "debug" {
@@ -96,11 +90,16 @@ func run() error {
 			p.Close()
 			// Delete old instance and trigger GC
 			runtime.GC()
-			if err := config.Unmarshal(panelConfig); err != nil {
+			// Unmarshal into a fresh object: reusing the old one keeps values
+			// for keys that were removed from the YAML.
+			newConfig, err := loadPanelConfig(config)
+			if err != nil {
 				log.Panicf("Parse config file %v failed: %s \n", cfgFile, err)
 			}
+			p.SetConfig(newConfig)
+			panelConfig = newConfig
 
-			if panelConfig.LogConfig != nil && panelConfig.LogConfig.Level == "debug" {
+			if panelConfig.LogConfig.Level == "debug" {
 				log.SetReportCaller(true)
 			}
 
@@ -120,6 +119,19 @@ func run() error {
 	<-osSignals
 
 	return nil
+}
+
+// loadPanelConfig unmarshals the viper config into a fresh panel.Config with
+// defaults applied (LogConfig may be omitted entirely in the file).
+func loadPanelConfig(config *viper.Viper) (*panel.Config, error) {
+	panelConfig := &panel.Config{}
+	if err := config.Unmarshal(panelConfig); err != nil {
+		return nil, fmt.Errorf("Parse config file %v failed: %s \n", cfgFile, err)
+	}
+	if panelConfig.LogConfig == nil {
+		panelConfig.LogConfig = &panel.LogConfig{}
+	}
+	return panelConfig, nil
 }
 
 func Execute() error {

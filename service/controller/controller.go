@@ -62,9 +62,9 @@ type Controller struct {
 // pendingTraffic carries per-user counters read by the pull side to the push
 // side, which reports them and (on success) resets the underlying xray counters.
 type pendingTraffic struct {
-	userTraffic   []api.UserTraffic
-	upCounters    []stats.Counter
-	downCounters  []stats.Counter
+	userTraffic  []api.UserTraffic
+	upCounters   []stats.Counter
+	downCounters []stats.Counter
 }
 
 type periodicTask struct {
@@ -234,7 +234,7 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 	var nodeInfoChanged = true
 	newNodeInfo, err := c.apiClient.GetNodeInfo()
 	if err != nil {
-		if err.Error() == api.NodeNotModified {
+		if errors.Is(err, api.ErrNodeNotModified) {
 			nodeInfoChanged = false
 			newNodeInfo = c.nodeInfo
 		} else {
@@ -259,7 +259,7 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 		}
 	}
 	if err != nil {
-		if err.Error() == api.UserNotModified {
+		if errors.Is(err, api.ErrUserNotModified) {
 			usersChanged = false
 			newUserInfo = c.userList
 		} else {
@@ -309,7 +309,7 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 	// Check Rule
 	if !c.config.DisableGetRule {
 		if ruleList, err := c.apiClient.GetNodeRule(); err != nil {
-			if err.Error() != api.RuleNotModified {
+			if !errors.Is(err, api.ErrRuleNotModified) {
 				c.logger.Printf("Get rule list filed: %s", err)
 			}
 		} else if len(*ruleList) > 0 {
@@ -357,7 +357,9 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 				}
 			}
 		}
-		c.logger.Printf("%d user deleted, %d user added", len(deleted), len(added))
+		if len(deleted) > 0 || len(added) > 0 {
+			c.logger.Printf("%d user deleted, %d user added", len(deleted), len(added))
+		}
 	}
 	c.trafficMu.Lock()
 	c.userList = newUserInfo
@@ -498,38 +500,27 @@ func (c *Controller) addNewUser(userInfo *[]api.UserInfo, nodeInfo *api.NodeInfo
 	return nil
 }
 
+// compareUserList diffs two user lists: entries present only in old are
+// deleted, entries present only in new are added. api.UserInfo is comparable,
+// so it doubles as a map key.
 func compareUserList(old, new *[]api.UserInfo) (deleted, added []api.UserInfo) {
-	mSrc := make(map[api.UserInfo]byte) // 按源数组建索引
-	mAll := make(map[api.UserInfo]byte) // 源+目所有元素建索引
+	oldSet := make(map[api.UserInfo]struct{}, len(*old))
+	newSet := make(map[api.UserInfo]struct{}, len(*new))
 
-	var set []api.UserInfo // 交集
-
-	// 1.源数组建立map
-	for _, v := range *old {
-		mSrc[v] = 0
-		mAll[v] = 0
+	for _, u := range *old {
+		oldSet[u] = struct{}{}
 	}
-	// 2.目数组中，存不进去，即重复元素，所有存不进去的集合就是并集
-	for _, v := range *new {
-		l := len(mAll)
-		mAll[v] = 1
-		if l != len(mAll) { // 长度变化，即可以存
-			l = len(mAll)
-		} else { // 存不了，进并集
-			set = append(set, v)
+	for _, u := range *new {
+		newSet[u] = struct{}{}
+	}
+	for u := range oldSet {
+		if _, exists := newSet[u]; !exists {
+			deleted = append(deleted, u)
 		}
 	}
-	// 3.遍历交集，在并集中找，找到就从并集中删，删完后就是补集（即并-交=所有变化的元素）
-	for _, v := range set {
-		delete(mAll, v)
-	}
-	// 4.此时，mall是补集，所有元素去源中找，找到就是删除的，找不到的必定能在目数组中找到，即新加的
-	for v := range mAll {
-		_, exist := mSrc[v]
-		if exist {
-			deleted = append(deleted, v)
-		} else {
-			added = append(added, v)
+	for u := range newSet {
+		if _, exists := oldSet[u]; !exists {
+			added = append(added, u)
 		}
 	}
 
@@ -654,19 +645,18 @@ func (c *Controller) userInfoMonitor() (err error) {
 }
 
 // unlockExpiredLimitsLocked releases users whose auto-limit duration expired.
-// Callers must hold c.trafficMu.
+// Callers must hold c.trafficMu. State transitions are logged (limit at
+// limitUserLocked, release here); steady state is silent to avoid reprinting
+// the limited-user list every cycle.
 func unlockExpiredLimitsLocked(c *Controller) {
 	if c.config.AutoSpeedLimitConfig.Limit > 0 && len(c.limitedUsers) > 0 {
-		c.logger.Printf("Limited users:")
 		toReleaseUsers := make([]api.UserInfo, 0)
 		for user, limitInfo := range c.limitedUsers {
 			if time.Now().Unix() > limitInfo.end {
 				user.SpeedLimit = limitInfo.originSpeedLimit
 				toReleaseUsers = append(toReleaseUsers, user)
-				c.logger.Printf("User: %s Speed: %d End: nil (Unlimit)", c.buildUserTag(&user), user.SpeedLimit)
+				c.logger.Printf("Unlimit User: %s Speed: %d", c.buildUserTag(&user), user.SpeedLimit)
 				delete(c.limitedUsers, user)
-			} else {
-				c.logger.Printf("User: %s Speed: %d End: %s", c.buildUserTag(&user), limitInfo.currentSpeedLimit, time.Unix(c.limitedUsers[user].end, 0).Format("01-02 15:04:05"))
 			}
 		}
 		if len(toReleaseUsers) > 0 {
@@ -752,9 +742,9 @@ func (c *Controller) pushMonitor() (err error) {
 		}
 
 		if err = c.apiClient.ReportNodeOnlineUsers(&result); err != nil {
-			log.Print(err)
+			c.logger.Print(err)
 		} else {
-			log.Printf("Total %d online users, %d Reported", len(*onlineDevice), len(result))
+			c.logger.Printf("Total %d online users, %d Reported", len(*onlineDevice), len(result))
 		}
 	}
 

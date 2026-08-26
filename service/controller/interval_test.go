@@ -54,14 +54,14 @@ func TestStartupGuardMatchesTaskInterval(t *testing.T) {
 	}
 	// Panel-provided pull=300s: the node/user monitors must skip at t=60
 	// (previously a broken two-level chain let them run early).
-	if c.startAt.Add(60 * time.Second).Sub(c.startAt) < c.pullInterval {
+	if c.startAt.Add(60*time.Second).Sub(c.startAt) < c.pullInterval {
 		t.Log("t=60s skipped for pull monitors (was wrongly executed before)")
 	} else {
 		t.Error("pull guard should block t=60s when pullInterval is 300s")
 	}
 	// Local push=10s: the push monitor must start sampling at t=10s instead
 	// of waiting for the old hardcoded 60s.
-	if c.startAt.Add(10 * time.Second).Sub(c.startAt) < c.pushInterval {
+	if c.startAt.Add(10*time.Second).Sub(c.startAt) < c.pushInterval {
 		t.Error("push guard should allow t=10s when pushInterval is 10s")
 	}
 }

@@ -44,6 +44,21 @@ func New(panelConfig *Config) *Panel {
 	return p
 }
 
+// loadJSONFile reads a JSON config file into v. An empty path leaves v
+// untouched and returns nil (the sections are all optional).
+func loadJSONFile(path string, v interface{}) {
+	if path == "" {
+		return
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Panicf("Failed to read config file at: %s", path)
+	}
+	if err := json.Unmarshal(data, v); err != nil {
+		log.Panicf("Failed to unmarshal config: %s", path)
+	}
+}
+
 func (p *Panel) loadCore(panelConfig *Config) *core.Instance {
 	// Log Config
 	coreLogConfig := &conf.LogConfig{}
@@ -59,20 +74,7 @@ func (p *Panel) loadCore(panelConfig *Config) *core.Instance {
 
 	// DNS config
 	coreDnsConfig := &conf.DNSConfig{}
-	if panelConfig.DnsConfigPath != "" {
-		if data, err := os.ReadFile(panelConfig.DnsConfigPath); err != nil {
-			log.Panicf("Failed to read DNS config file at: %s", panelConfig.DnsConfigPath)
-		} else {
-			if err = json.Unmarshal(data, coreDnsConfig); err != nil {
-				log.Panicf("Failed to unmarshal DNS config: %s", panelConfig.DnsConfigPath)
-			}
-		}
-	}
-
-	// init controller's DNS config
-	// for _, config := range p.panelConfig.NodesConfig {
-	// 	config.ControllerConfig.DNSConfig = coreDnsConfig
-	// }
+	loadJSONFile(panelConfig.DnsConfigPath, coreDnsConfig)
 
 	dnsConfig, err := coreDnsConfig.Build()
 	if err != nil {
@@ -81,30 +83,14 @@ func (p *Panel) loadCore(panelConfig *Config) *core.Instance {
 
 	// Routing config
 	coreRouterConfig := &conf.RouterConfig{}
-	if panelConfig.RouteConfigPath != "" {
-		if data, err := os.ReadFile(panelConfig.RouteConfigPath); err != nil {
-			log.Panicf("Failed to read Routing config file at: %s", panelConfig.RouteConfigPath)
-		} else {
-			if err = json.Unmarshal(data, coreRouterConfig); err != nil {
-				log.Panicf("Failed to unmarshal Routing config: %s", panelConfig.RouteConfigPath)
-			}
-		}
-	}
+	loadJSONFile(panelConfig.RouteConfigPath, coreRouterConfig)
 	routeConfig, err := coreRouterConfig.Build()
 	if err != nil {
 		log.Panicf("Failed to understand Routing config  Please check: https://xtls.github.io/config/routing.html for help: %s", err)
 	}
 	// Custom Inbound config
 	var coreCustomInboundConfig []conf.InboundDetourConfig
-	if panelConfig.InboundConfigPath != "" {
-		if data, err := os.ReadFile(panelConfig.InboundConfigPath); err != nil {
-			log.Panicf("Failed to read Custom Inbound config file at: %s", panelConfig.InboundConfigPath)
-		} else {
-			if err = json.Unmarshal(data, &coreCustomInboundConfig); err != nil {
-				log.Panicf("Failed to unmarshal Custom Inbound config: %s", panelConfig.InboundConfigPath)
-			}
-		}
-	}
+	loadJSONFile(panelConfig.InboundConfigPath, &coreCustomInboundConfig)
 	var inBoundConfig []*core.InboundHandlerConfig
 	for _, config := range coreCustomInboundConfig {
 		oc, err := config.Build()
@@ -115,15 +101,7 @@ func (p *Panel) loadCore(panelConfig *Config) *core.Instance {
 	}
 	// Custom Outbound config
 	var coreCustomOutboundConfig []conf.OutboundDetourConfig
-	if panelConfig.OutboundConfigPath != "" {
-		if data, err := os.ReadFile(panelConfig.OutboundConfigPath); err != nil {
-			log.Panicf("Failed to read Custom Outbound config file at: %s", panelConfig.OutboundConfigPath)
-		} else {
-			if err = json.Unmarshal(data, &coreCustomOutboundConfig); err != nil {
-				log.Panicf("Failed to unmarshal Custom Outbound config: %s", panelConfig.OutboundConfigPath)
-			}
-		}
-	}
+	loadJSONFile(panelConfig.OutboundConfigPath, &coreCustomOutboundConfig)
 	var outBoundConfig []*core.OutboundHandlerConfig
 	for _, config := range coreCustomOutboundConfig {
 		oc, err := config.Build()
@@ -136,7 +114,10 @@ func (p *Panel) loadCore(panelConfig *Config) *core.Instance {
 	levelPolicyConfig := parseConnectionConfig(panelConfig.ConnectionConfig)
 	corePolicyConfig := &conf.PolicyConfig{}
 	corePolicyConfig.Levels = map[uint32]*conf.Policy{0: levelPolicyConfig}
-	policyConfig, _ := corePolicyConfig.Build()
+	policyConfig, err := corePolicyConfig.Build()
+	if err != nil {
+		log.Panicf("Failed to build policy config: %s", err)
+	}
 	// Build Core Config
 	config := &core.Config{
 		App: []*serial.TypedMessage{
@@ -159,6 +140,12 @@ func (p *Panel) loadCore(panelConfig *Config) *core.Instance {
 	log.Printf("Xray Core Version: %s", core.Version())
 
 	return server
+}
+
+// SetConfig replaces the panel config; used by the config hot-reload path
+// between Close() and Start().
+func (p *Panel) SetConfig(panelConfig *Config) {
+	p.panelConfig = panelConfig
 }
 
 // Start the panel

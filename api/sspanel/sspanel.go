@@ -94,39 +94,37 @@ func New(apiConfig *api.Config) *APIClient {
 	}
 }
 
-// readLocalRuleList reads the local rule list file
+// readLocalRuleList reads the local rule list file, one regexp per line.
+// Bad lines are logged and skipped; a single invalid rule must not kill the
+// process (regexp.MustCompile would panic).
 func readLocalRuleList(path string) (LocalRuleList []api.DetectRule) {
 	LocalRuleList = make([]api.DetectRule, 0)
-	if path != "" {
-		// open the file
-		file, err := os.Open(path)
 
-		defer func(file *os.File) {
-			err := file.Close()
-			if err != nil {
-				log.Printf("Error when closing file: %s", err)
-			}
-		}(file)
-		// handle errors while opening
+	if path == "" {
+		return LocalRuleList
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		log.Printf("Error when opening file: %s", err)
+		return LocalRuleList
+	}
+	defer file.Close()
+
+	fileScanner := bufio.NewScanner(file)
+	for fileScanner.Scan() {
+		pattern, err := regexp.Compile(fileScanner.Text())
 		if err != nil {
-			log.Printf("Error when opening file: %s", err)
-			return LocalRuleList
+			log.Printf("Skipping invalid rule %q: %s", fileScanner.Text(), err)
+			continue
 		}
-
-		fileScanner := bufio.NewScanner(file)
-
-		// read line by line
-		for fileScanner.Scan() {
-			LocalRuleList = append(LocalRuleList, api.DetectRule{
-				ID:      -1,
-				Pattern: regexp.MustCompile(fileScanner.Text()),
-			})
-		}
-		// handle first encountered error while reading
-		if err := fileScanner.Err(); err != nil {
-			log.Fatalf("Error while reading file: %s", err)
-			return
-		}
+		LocalRuleList = append(LocalRuleList, api.DetectRule{
+			ID:      -1,
+			Pattern: pattern,
+		})
+	}
+	if err := fileScanner.Err(); err != nil {
+		log.Printf("Error while reading file: %s", err)
 	}
 
 	return LocalRuleList
@@ -174,7 +172,7 @@ func (c *APIClient) GetNodeInfo() (nodeInfo *api.NodeInfo, err error) {
 		Get(path)
 	// Etag identifier for a specific version of a resource. StatusCode = 304 means no changed
 	if res.StatusCode() == 304 {
-		return nil, errors.New(api.NodeNotModified)
+		return nil, api.ErrNodeNotModified
 	}
 
 	if res.Header().Get("ETag") != "" && res.Header().Get("ETag") != c.eTags["node"] {
@@ -243,7 +241,7 @@ func (c *APIClient) GetUserList() (UserList *[]api.UserInfo, err error) {
 		Get(path)
 	// Etag identifier for a specific version of a resource. StatusCode = 304 means no changed
 	if res.StatusCode() == 304 {
-		return nil, errors.New(api.UserNotModified)
+		return nil, api.ErrUserNotModified
 	}
 
 	if res.Header().Get("ETag") != "" && res.Header().Get("ETag") != c.eTags["users"] {
@@ -360,7 +358,7 @@ func (c *APIClient) GetNodeRule() (*[]api.DetectRule, error) {
 
 	// Etag identifier for a specific version of a resource. StatusCode = 304 means no changed
 	if res.StatusCode() == 304 {
-		return nil, errors.New(api.RuleNotModified)
+		return nil, api.ErrRuleNotModified
 	}
 
 	if res.Header().Get("ETag") != "" && res.Header().Get("ETag") != c.eTags["rules"] {

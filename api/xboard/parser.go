@@ -29,7 +29,7 @@ func (c *APIClient) GetNodeInfo() (nodeInfo *api.NodeInfo, err error) {
 	}
 	// Etag identifier for a specific version of a resource. StatusCode = 304 means no changed
 	if res.StatusCode() == 304 {
-		return nil, errors.New(api.NodeNotModified)
+		return nil, api.ErrNodeNotModified
 	}
 
 	res, err = c.parseResponse(res, path, err)
@@ -116,7 +116,7 @@ func (c *APIClient) GetUserList() (*[]api.UserInfo, error) {
 	}
 	// Etag identifier for a specific version of a resource. StatusCode = 304 means no changed
 	if res.StatusCode() == 304 {
-		return nil, errors.New(api.UserNotModified)
+		return nil, api.ErrUserNotModified
 	}
 
 	res, err = c.parseResponse(res, path, err)
@@ -339,20 +339,20 @@ func (c *APIClient) parseTrojanNodeResponse(s *nodeConfig) (*api.NodeInfo, error
 
 	// Create GeneralNodeInfo
 	nodeInfo := &api.NodeInfo{
-		NodeType:          c.NodeType,
-		NodeID:            c.NodeID,
-		Port:              uint32(s.ServerPort),
-		TransportProtocol: transportProtocol,
-		Path:              s.NetworkSettings.Path,
-		EnableTLS:         enableTLS,
-		Host:              host,
-		Header:            header,
-		ServiceName:       s.NetworkSettings.ServiceName,
-		NameServerConfig:  s.parseDNSConfig(),
-		EnableREALITY:     enableREALITY,
-		REALITYConfig:     realityConfig,
-		PushInterval:      s.BaseConfig.PushInterval,
-		PullInterval:      s.BaseConfig.PullInterval,
+		NodeType:            c.NodeType,
+		NodeID:              c.NodeID,
+		Port:                uint32(s.ServerPort),
+		TransportProtocol:   transportProtocol,
+		Path:                s.NetworkSettings.Path,
+		EnableTLS:           enableTLS,
+		Host:                host,
+		Header:              header,
+		ServiceName:         s.NetworkSettings.ServiceName,
+		NameServerConfig:    s.parseDNSConfig(),
+		EnableREALITY:       enableREALITY,
+		REALITYConfig:       realityConfig,
+		PushInterval:        s.BaseConfig.PushInterval,
+		PullInterval:        s.BaseConfig.PullInterval,
 		AcceptProxyProtocol: s.AcceptProxyProtocol,
 	}
 	if host == "" {
@@ -479,24 +479,24 @@ func (c *APIClient) parseV2rayNodeResponse(s *nodeConfig) (*api.NodeInfo, error)
 
 	// Create GeneralNodeInfo
 	return &api.NodeInfo{
-		NodeType:          c.NodeType,
-		NodeID:            c.NodeID,
-		Port:              uint32(s.ServerPort),
-		AlterID:           0,
-		TransportProtocol: s.Network,
-		EnableTLS:         enableTLS,
-		Path:              s.NetworkSettings.Path,
-		Host:              host,
-		EnableVless:       isVless,
-		VlessFlow:         s.Flow,
-		ServiceName:       s.NetworkSettings.ServiceName,
-		Header:            header,
-		EnableREALITY:     enableREALITY,
-		REALITYConfig:     &realityconfig,
-		Decryption:        s.Decryption,
-		NameServerConfig:  s.parseDNSConfig(),
-		PushInterval:      s.BaseConfig.PushInterval,
-		PullInterval:      s.BaseConfig.PullInterval,
+		NodeType:            c.NodeType,
+		NodeID:              c.NodeID,
+		Port:                uint32(s.ServerPort),
+		AlterID:             0,
+		TransportProtocol:   s.Network,
+		EnableTLS:           enableTLS,
+		Path:                s.NetworkSettings.Path,
+		Host:                host,
+		EnableVless:         isVless,
+		VlessFlow:           s.Flow,
+		ServiceName:         s.NetworkSettings.ServiceName,
+		Header:              header,
+		EnableREALITY:       enableREALITY,
+		REALITYConfig:       &realityconfig,
+		Decryption:          s.Decryption,
+		NameServerConfig:    s.parseDNSConfig(),
+		PushInterval:        s.BaseConfig.PushInterval,
+		PullInterval:        s.BaseConfig.PullInterval,
 		AcceptProxyProtocol: s.AcceptProxyProtocol,
 	}, nil
 }
@@ -508,20 +508,20 @@ func (c *APIClient) parseHysteriaNodeResponse(s *nodeConfig) (*api.NodeInfo, err
 		return nil, fmt.Errorf("xray-core only supports hysteria v2, got version %d", s.Version)
 	}
 	return &api.NodeInfo{
-		NodeType:          c.NodeType,
-		NodeID:            c.NodeID,
-		Port:              uint32(s.ServerPort),
-		TransportProtocol: "hysteria",
-		EnableTLS:         true, // hysteria always runs over TLS
-		HysteriaVersion:   s.Version,
-		UpMbps:            s.UpMbps,
-		DownMbps:          s.DownMbps,
-		Obfs:              s.Obfs,
-		ObfsPassword:      s.ObfsPassword,
-		Host:              s.Host,
-		NameServerConfig:  s.parseDNSConfig(),
-		PushInterval:      s.BaseConfig.PushInterval,
-		PullInterval:      s.BaseConfig.PullInterval,
+		NodeType:            c.NodeType,
+		NodeID:              c.NodeID,
+		Port:                uint32(s.ServerPort),
+		TransportProtocol:   "hysteria",
+		EnableTLS:           true, // hysteria always runs over TLS
+		HysteriaVersion:     s.Version,
+		UpMbps:              s.UpMbps,
+		DownMbps:            s.DownMbps,
+		Obfs:                s.Obfs,
+		ObfsPassword:        s.ObfsPassword,
+		Host:                s.Host,
+		NameServerConfig:    s.parseDNSConfig(),
+		PushInterval:        s.BaseConfig.PushInterval,
+		PullInterval:        s.BaseConfig.PullInterval,
 		AcceptProxyProtocol: s.AcceptProxyProtocol,
 	}, nil
 }

@@ -10,8 +10,8 @@ import (
 
 	"github.com/aprpure/XrayR/api"
 	"github.com/aprpure/XrayR/api/sspanel"
-	_ "github.com/aprpure/XrayR/cmd/distro/all"
 	"github.com/aprpure/XrayR/app/mydispatcher"
+	_ "github.com/aprpure/XrayR/cmd/distro/all"
 	"github.com/aprpure/XrayR/common/mylego"
 	. "github.com/aprpure/XrayR/service/controller"
 )

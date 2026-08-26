@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/aprpure/XrayR/api"
+	log "github.com/sirupsen/logrus"
 )
 
 type inboundRules struct {
