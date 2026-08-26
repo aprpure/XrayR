@@ -35,6 +35,14 @@ func (r *Manager) UpdateRule(tag string, newRuleList []api.DetectRule) error {
 	return nil
 }
 
+// RemoveInbound drops all state for an inbound tag. Must be paired with
+// limiter.DeleteInboundLimiter when a node tag is replaced, otherwise the old
+// rules and detect results leak.
+func (r *Manager) RemoveInbound(tag string) {
+	r.InboundRule.Delete(tag)
+	r.InboundDetectResult.Delete(tag)
+}
+
 func (r *Manager) GetDetectResult(tag string) (*[]api.DetectResult, error) {
 	detectResult := make([]api.DetectResult, 0)
 	if value, ok := r.InboundDetectResult.LoadAndDelete(tag); ok {

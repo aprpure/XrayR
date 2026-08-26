@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/eko/gocache/lib/v4/cache"
@@ -36,9 +37,10 @@ type InboundInfo struct {
 	GlobalLimit    struct {
 		config         *GlobalDeviceLimitConfig
 		globalOnlineIP *marshaler.Marshaler
+		mu             sync.Mutex // serializes read-modify-write of cached IP maps and their async push back to the cache
 	}
-	AliveList     map[int]int // Key: Uid, value: alive_ip
-	OldUserOnline *sync.Map   // Key: Ip, value: Uid
+	AliveList     atomic.Pointer[map[int]int] // Key: Uid, value: alive_ip; published atomically so the dispatch path can read it lock-free
+	OldUserOnline *sync.Map                   // Key: Ip, value: Uid
 }
 
 type Limiter struct {
@@ -131,6 +133,17 @@ func (l *Limiter) DeleteInboundLimiter(tag string) error {
 	return nil
 }
 
+// SetAliveList atomically replaces the alive-IP map for an inbound. The map is
+// published as-is and must not be mutated afterwards.
+func (l *Limiter) SetAliveList(tag string, alive map[int]int) error {
+	if value, ok := l.InboundInfo.Load(tag); ok {
+		inboundInfo := value.(*InboundInfo)
+		inboundInfo.AliveList.Store(&alive)
+		return nil
+	}
+	return fmt.Errorf("no such inbound in limiter: %s", tag)
+}
+
 func (l *Limiter) GetOnlineDevice(tag string) (*[]api.OnlineUser, error) {
 	var onlineUser []api.OnlineUser
 
@@ -144,17 +157,28 @@ func (l *Limiter) GetOnlineDevice(tag string) (*[]api.OnlineUser, error) {
 			}
 			return true
 		})
+		onlineIPs := make(map[string]struct{})
 		inboundInfo.UserOnlineIP.Range(func(key, value interface{}) bool {
 			email := key.(string)
 			ipMap := value.(*sync.Map)
 			ipMap.Range(func(key, value interface{}) bool {
 				uid := value.(int)
 				ip := key.(string)
+				onlineIPs[ip] = struct{}{}
 				inboundInfo.OldUserOnline.Store(ip, uid)
 				onlineUser = append(onlineUser, api.OnlineUser{UID: uid, IP: ip})
 				return true
 			})
 			inboundInfo.UserOnlineIP.Delete(email) // Reset online device
+			return true
+		})
+		// Drop stale OldUserOnline entries: IPs that were online in a previous
+		// period but not in this one. Without this the map only ever grows.
+		inboundInfo.OldUserOnline.Range(func(key, value interface{}) bool {
+			ip := key.(string)
+			if _, online := onlineIPs[ip]; !online {
+				inboundInfo.OldUserOnline.Delete(ip)
+			}
 			return true
 		})
 	} else {
@@ -185,7 +209,10 @@ func (l *Limiter) GetUserBucket(tag string, email string, ip string, isSourceTCP
 		if isSourceTCP {
 			ipMap := new(sync.Map)
 			ipMap.Store(ip, uid)
-			aliveIp := inboundInfo.AliveList[uid]
+			var aliveIp int
+			if alive := inboundInfo.AliveList.Load(); alive != nil {
+				aliveIp = (*alive)[uid]
+			}
 			// If any device is online
 			if v, ok := inboundInfo.UserOnlineIP.LoadOrStore(email, ipMap); ok {
 				ipMap := v.(*sync.Map)
@@ -238,14 +265,19 @@ func (l *Limiter) GetUserBucket(tag string, email string, ip string, isSourceTCP
 	}
 }
 
-// Global device limit
+// Global device limit. Returns true when the device limit is reached.
 func globalLimit(inboundInfo *InboundInfo, email string, uid int, ip string, deviceLimit int) bool {
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(inboundInfo.GlobalLimit.config.Timeout)*time.Second)
 	defer cancel()
 
 	// reformat email for unique key
 	uniqueKey := strings.Replace(email, inboundInfo.Tag, strconv.Itoa(deviceLimit), 1)
+
+	// Serialize the cache read-modify-write per inbound: concurrent connections
+	// mutating the same cached map race each other and their async pushIP calls
+	// overwrite one another, losing IPs.
+	inboundInfo.GlobalLimit.mu.Lock()
+	defer inboundInfo.GlobalLimit.mu.Unlock()
 
 	v, err := inboundInfo.GlobalLimit.globalOnlineIP.Get(ctx, uniqueKey, new(map[string]int))
 	if err != nil {
@@ -266,8 +298,16 @@ func globalLimit(inboundInfo *InboundInfo, email string, uid int, ip string, dev
 
 	// If the ip is not in cache
 	if _, ok := (*ipMap)[ip]; !ok {
-		(*ipMap)[ip] = uid
-		go pushIP(inboundInfo, uniqueKey, ipMap)
+		// Push a copy: the shared map keeps being mutated under mu while this
+		// goroutine writes to the (possibly slow) remote cache.
+		snapshot := make(map[string]int, len(*ipMap))
+		for k, v := range *ipMap {
+			snapshot[k] = v
+		}
+		snapshot[ip] = uid
+		go func() {
+			pushIP(inboundInfo, uniqueKey, &snapshot)
+		}()
 	}
 
 	return false

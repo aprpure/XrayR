@@ -1,11 +1,7 @@
 package controller_test
 
 import (
-	"fmt"
-	"os"
-	"os/signal"
 	"runtime"
-	"syscall"
 	"testing"
 
 	"github.com/xtls/xray-core/common/serial"
@@ -20,6 +16,9 @@ import (
 	. "github.com/aprpure/XrayR/service/controller"
 )
 
+// TestController spins up a core instance with mydispatcher and starts a
+// controller against an unreachable panel host. Controller.Start returns the
+// panel fetch error — that is the behavior under test (no panic, no hang).
 func TestController(t *testing.T) {
 	serverConfig := &conf.Config{
 		Stats:     &conf.StatsConfig{},
@@ -31,28 +30,23 @@ func TestController(t *testing.T) {
 		StatsUserDownlink: true,
 	}}
 	serverConfig.Policy = policyConfig
-	config, _ := serverConfig.Build()
+	config, err := serverConfig.Build()
+	if err != nil {
+		t.Fatalf("build server config: %s", err)
+	}
 
 	// conf.Config.Build() injects the stock dispatcher.Config as the first app;
 	// replace it with XrayR's mydispatcher (panel.go does the same when building
 	// the production config).
 	config.App[0] = serial.ToTypedMessage(&mydispatcher.Config{})
 
-	// config := &core.Config{
-	// 	App: []*serial.TypedMessage{
-	// 		serial.ToTypedMessage(&dispatcher.Config{}),
-	// 		serial.ToTypedMessage(&proxyman.InboundConfig{}),
-	// 		serial.ToTypedMessage(&proxyman.OutboundConfig{}),
-	// 		serial.ToTypedMessage(&stats.Config{}),
-	// 	}}
-
 	server, err := core.New(config)
-	defer server.Close()
 	if err != nil {
-		t.Errorf("failed to create instance: %s", err)
+		t.Fatalf("failed to create instance: %s", err)
 	}
-	if err = server.Start(); err != nil {
-		t.Errorf("Failed to start instance: %s", err)
+	defer server.Close()
+	if err := server.Start(); err != nil {
+		t.Fatalf("failed to start instance: %s", err)
 	}
 	certConfig := &mylego.CertConfig{
 		CertMode:   "http",
@@ -60,7 +54,7 @@ func TestController(t *testing.T) {
 		Provider:   "alidns",
 		Email:      "ss@ss.com",
 	}
-	controlerConfig := &Config{
+	controllerConfig := &Config{
 		UpdatePeriodic: 5,
 		CertConfig:     certConfig,
 	}
@@ -71,18 +65,11 @@ func TestController(t *testing.T) {
 		NodeType: "V2ray",
 	}
 	apiClient := sspanel.New(apiConfig)
-	c := New(server, apiClient, controlerConfig, "SSpanel")
-	fmt.Println("Sleep 1s")
-	err = c.Start()
-	if err != nil {
-		t.Error(err)
+	c := New(server, apiClient, controllerConfig, "SSPanel")
+	// The panel at 127.0.0.1:667 does not exist; Start must fail cleanly.
+	if err := c.Start(); err == nil {
+		t.Error("expected Start to fail with unreachable panel, got nil")
 	}
 	// Explicitly triggering GC to remove garbage from config loading.
 	runtime.GC()
-
-	{
-		osSignals := make(chan os.Signal, 1)
-		signal.Notify(osSignals, os.Interrupt, os.Kill, syscall.SIGTERM)
-		<-osSignals
-	}
 }

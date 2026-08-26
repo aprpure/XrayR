@@ -19,7 +19,6 @@ import (
 	"github.com/aprpure/XrayR/api"
 	"github.com/aprpure/XrayR/api/newV2board"
 	"github.com/aprpure/XrayR/app/mydispatcher"
-	"github.com/aprpure/XrayR/common/limiter"
 	"github.com/aprpure/XrayR/common/mylego"
 	"github.com/aprpure/XrayR/common/serverstatus"
 )
@@ -133,9 +132,8 @@ func (c *Controller) Start() error {
 
 	// Update alive user list
 	if v2b, ok := c.apiClient.(*newV2board.APIClient); ok {
-		if v, ok := c.dispatcher.Limiter.InboundInfo.Load(c.Tag); ok {
-			inboundinfo := v.(*limiter.InboundInfo)
-			inboundinfo.AliveList = v2b.AliveMap.Alive
+		if err := c.dispatcher.Limiter.SetAliveList(c.Tag, v2b.AliveMap.Alive); err != nil {
+			c.logger.Print(err)
 		}
 	}
 
@@ -247,9 +245,8 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 
 	// Update alive user list
 	if v2b, ok := c.apiClient.(*newV2board.APIClient); ok {
-		if v, ok := c.dispatcher.Limiter.InboundInfo.Load(c.Tag); ok {
-			inboundinfo := v.(*limiter.InboundInfo)
-			inboundinfo.AliveList = v2b.AliveMap.Alive
+		if err := c.dispatcher.Limiter.SetAliveList(c.Tag, v2b.AliveMap.Alive); err != nil {
+			c.logger.Print(err)
 		}
 	}
 	if err != nil {
@@ -272,6 +269,11 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 				c.logger.Print(err)
 				return nil
 			}
+			// Drop limiter and rule state registered under the old tag.
+			if err = c.DeleteInboundLimiter(oldTag); err != nil {
+				c.logger.Print(err)
+			}
+			c.dispatcher.RuleManager.RemoveInbound(oldTag)
 			if c.nodeInfo.NodeType == "Shadowsocks-Plugin" {
 				err = c.removeOldTag(fmt.Sprintf("dokodemo-door_%s+1", c.Tag))
 			}
@@ -290,11 +292,6 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 				return nil
 			}
 			nodeInfoChanged = true
-			// Remove Old limiter
-			if err = c.DeleteInboundLimiter(oldTag); err != nil {
-				c.logger.Print(err)
-				return nil
-			}
 		} else {
 			nodeInfoChanged = false
 		}
@@ -455,7 +452,9 @@ func (c *Controller) addNewUser(userInfo *[]api.UserInfo, nodeInfo *api.NodeInfo
 	users := make([]*protocol.User, 0)
 	switch nodeInfo.NodeType {
 	case "V2ray", "Vmess", "Vless":
-		if nodeInfo.EnableVless || (nodeInfo.NodeType == "Vless" && nodeInfo.NodeType != "Vmess") {
+		// Same condition as InboundBuilder: V2ray nodes pick vless via
+		// EnableVless, so the user accounts must match the inbound protocol.
+		if (nodeInfo.NodeType == "V2ray" && nodeInfo.EnableVless) || nodeInfo.NodeType == "Vless" {
 			users = c.buildVlessUser(userInfo)
 		} else {
 			users = c.buildVmessUser(userInfo)

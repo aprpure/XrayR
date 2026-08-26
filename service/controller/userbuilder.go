@@ -89,70 +89,73 @@ func (c *Controller) buildHysteriaUser(userInfo *[]api.UserInfo) (users []*proto
 	return users
 }
 
+// buildSSUser builds shadowsocks users. Users with an invalid key/password are
+// skipped (with a log line) instead of producing a nil entry that would panic
+// in addUsers' ToMemoryUser().
 func (c *Controller) buildSSUser(userInfo *[]api.UserInfo, method string) (users []*protocol.User) {
-	users = make([]*protocol.User, len(*userInfo))
+	users = make([]*protocol.User, 0, len(*userInfo))
 
-	for i, user := range *userInfo {
+	for _, user := range *userInfo {
 		// shadowsocks2022 Key = "openssl rand -base64 32" and multi users needn't cipher method
 		if C.Contains(shadowaead_2022.List, strings.ToLower(method)) {
-			e := c.buildUserTag(&user)
 			userKey, err := c.checkShadowsocksPassword(user.Passwd, method)
 			if err != nil {
 				log.Error(fmt.Errorf("[UID: %d] %s", user.UID, err))
 				continue
 			}
-			users[i] = &protocol.User{
+			users = append(users, &protocol.User{
 				Level: 0,
-				Email: e,
+				Email: c.buildUserTag(&user),
 				Account: serial.ToTypedMessage(&shadowsocks_2022.Account{
 					Key: userKey,
 				}),
-			}
+			})
 		} else {
-			users[i] = &protocol.User{
+			users = append(users, &protocol.User{
 				Level: 0,
 				Email: c.buildUserTag(&user),
 				Account: serial.ToTypedMessage(&shadowsocks.Account{
 					Password:   user.Passwd,
 					CipherType: cipherFromString(method),
 				}),
-			}
+			})
 		}
 	}
 	return users
 }
 
 func (c *Controller) buildSSPluginUser(userInfo *[]api.UserInfo) (users []*protocol.User) {
-	users = make([]*protocol.User, len(*userInfo))
+	users = make([]*protocol.User, 0, len(*userInfo))
 
-	for i, user := range *userInfo {
+	for _, user := range *userInfo {
 		// shadowsocks2022 Key = openssl rand -base64 32 and multi users needn't cipher method
 		if C.Contains(shadowaead_2022.List, strings.ToLower(user.Method)) {
-			e := c.buildUserTag(&user)
 			userKey, err := c.checkShadowsocksPassword(user.Passwd, user.Method)
 			if err != nil {
 				log.Error(fmt.Errorf("[UID: %d] %s", user.UID, err))
 				continue
 			}
-			users[i] = &protocol.User{
+			users = append(users, &protocol.User{
 				Level: 0,
-				Email: e,
+				Email: c.buildUserTag(&user),
 				Account: serial.ToTypedMessage(&shadowsocks_2022.Account{
 					Key: userKey,
 				}),
-			}
+			})
 		} else {
-			// Check if the cypher method is AEAD
+			// Check if the cypher method is AEAD; unknown ciphers are skipped.
 			cypherMethod := cipherFromString(user.Method)
 			if _, ok := AEADMethod[cypherMethod]; ok {
-				users[i] = &protocol.User{
+				users = append(users, &protocol.User{
 					Level: 0,
 					Email: c.buildUserTag(&user),
 					Account: serial.ToTypedMessage(&shadowsocks.Account{
 						Password:   user.Passwd,
 						CipherType: cypherMethod,
 					}),
-				}
+				})
+			} else {
+				log.Error(fmt.Errorf("[UID: %d] unsupported shadowsocks cipher: %s", user.UID, user.Method))
 			}
 		}
 	}

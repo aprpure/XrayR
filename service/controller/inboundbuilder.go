@@ -261,10 +261,17 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		}
 		streamSetting.Security = "reality"
 		var private_key string
+		var shortIds []string
 		if nodeInfo.REALITYConfig != nil {
 			private_key = nodeInfo.REALITYConfig.PrivateKey
+			// Copy instead of appending into config.REALITYConfigs.ShortIds:
+			// that would alias (and grow) the shared local config on every rebuild.
+			shortIds = make([]string, 0, len(config.REALITYConfigs.ShortIds)+len(nodeInfo.REALITYConfig.ShortIds))
+			shortIds = append(shortIds, config.REALITYConfigs.ShortIds...)
+			shortIds = append(shortIds, nodeInfo.REALITYConfig.ShortIds...)
 		} else {
 			private_key = config.REALITYConfigs.PrivateKey
+			shortIds = append([]string(nil), config.REALITYConfigs.ShortIds...)
 		}
 		streamSetting.REALITYSettings = &conf.REALITYConfig{
 			Show:         config.REALITYConfigs.Show,
@@ -275,7 +282,7 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 			MinClientVer: config.REALITYConfigs.MinClientVer,
 			MaxClientVer: config.REALITYConfigs.MaxClientVer,
 			MaxTimeDiff:  config.REALITYConfigs.MaxTimeDiff,
-			ShortIds:     append(config.REALITYConfigs.ShortIds, nodeInfo.REALITYConfig.ShortIds...),
+			ShortIds:     shortIds,
 		}
 	}
 
