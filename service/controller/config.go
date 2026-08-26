@@ -8,9 +8,9 @@ import (
 type Config struct {
 	ListenIP                  string                           `mapstructure:"ListenIP"`
 	SendIP                    string                           `mapstructure:"SendIP"`
-	UpdatePeriodic            int                              `mapstructure:"UpdatePeriodic"` // Deprecated: legacy single interval, used as fallback when PullInterval/PushInterval are unset
-	PullInterval              int                              `mapstructure:"PullInterval"`   // Seconds between node/user config fetches; overrides panel value when > 0
-	PushInterval              int                              `mapstructure:"PushInterval"`   // Seconds between traffic/online reports; overrides panel value when > 0
+	UpdatePeriodic            int                              `mapstructure:"UpdatePeriodic"` // Deprecated: legacy single interval, used as fallback when PullInterval/PushInterval and the panel provide nothing
+	PullInterval              int                              `mapstructure:"PullInterval"`   // Seconds between node/user config fetches. 0 = follow the panel; >0 = force this value regardless of the panel
+	PushInterval              int                              `mapstructure:"PushInterval"`   // Seconds between traffic/online reports. 0 = follow the panel; >0 = force this value regardless of the panel
 	DeviceOnlineMinTraffic    int                              `mapstructure:"DeviceOnlineMinTraffic"`
 	CertConfig                *mylego.CertConfig               `mapstructure:"CertConfig"`
 	EnableDNS                 bool                             `mapstructure:"EnableDNS"`

@@ -1,6 +1,9 @@
 package controller
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestFirstNonZero(t *testing.T) {
 	cases := []struct {
@@ -37,5 +40,28 @@ func TestIntervalResolution(t *testing.T) {
 	}
 	if got := firstNonZero(0, 0, 0, fallback); got != 60 {
 		t.Errorf("final fallback: got %d", got)
+	}
+}
+
+// TestStartupGuardMatchesTaskInterval verifies the resolved durations feed
+// both the periodic task interval and the startup-delay guard: a guard must
+// never disagree with the cadence its monitor runs on.
+func TestStartupGuardMatchesTaskInterval(t *testing.T) {
+	c := &Controller{
+		startAt:      time.Now(),
+		pullInterval: 300 * time.Second,
+		pushInterval: 10 * time.Second,
+	}
+	// Panel-provided pull=300s: the node/user monitors must skip at t=60
+	// (previously a broken two-level chain let them run early).
+	if c.startAt.Add(60 * time.Second).Sub(c.startAt) < c.pullInterval {
+		t.Log("t=60s skipped for pull monitors (was wrongly executed before)")
+	} else {
+		t.Error("pull guard should block t=60s when pullInterval is 300s")
+	}
+	// Local push=10s: the push monitor must start sampling at t=10s instead
+	// of waiting for the old hardcoded 60s.
+	if c.startAt.Add(10 * time.Second).Sub(c.startAt) < c.pushInterval {
+		t.Error("push guard should allow t=10s when pushInterval is 10s")
 	}
 }

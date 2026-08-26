@@ -47,6 +47,12 @@ type Controller struct {
 	startAt      time.Time
 	logger       *log.Entry
 
+	// Resolved task cadences (priority: local config > panel base_config >
+	// legacy UpdatePeriodic > 60s). The monitors' startup-delay guards use
+	// these so a guard never disagrees with the interval its task runs on.
+	pullInterval time.Duration
+	pushInterval time.Duration
+
 	// trafficMu guards pendingTraffic, limitedUsers and warnedUsers, which are
 	// written by the pull-side monitor and read/cleared by the push-side monitor.
 	trafficMu      sync.Mutex
@@ -160,28 +166,28 @@ func (c *Controller) Start() error {
 
 	// Resolve pull/push intervals.
 	// Priority: local explicit config > panel-provided base_config > legacy UpdatePeriodic > 60s.
-	pullInterval := firstNonZero(c.config.PullInterval, c.nodeInfo.PullInterval, c.config.UpdatePeriodic, defaultUpdatePeriodic)
-	pushInterval := firstNonZero(c.config.PushInterval, c.nodeInfo.PushInterval, c.config.UpdatePeriodic, defaultUpdatePeriodic)
-	c.logger.Printf("Pull interval: %ds, Push interval: %ds", pullInterval, pushInterval)
+	c.pullInterval = time.Duration(firstNonZero(c.config.PullInterval, c.nodeInfo.PullInterval, c.config.UpdatePeriodic, defaultUpdatePeriodic)) * time.Second
+	c.pushInterval = time.Duration(firstNonZero(c.config.PushInterval, c.nodeInfo.PushInterval, c.config.UpdatePeriodic, defaultUpdatePeriodic)) * time.Second
+	c.logger.Printf("Pull interval: %ds, Push interval: %ds", c.pullInterval/time.Second, c.pushInterval/time.Second)
 
 	// Add periodic tasks
 	c.tasks = append(c.tasks,
 		periodicTask{
 			tag: "node monitor",
 			Periodic: &task.Periodic{
-				Interval: time.Duration(pullInterval) * time.Second,
+				Interval: c.pullInterval,
 				Execute:  c.nodeInfoMonitor,
 			}},
 		periodicTask{
 			tag: "user monitor",
 			Periodic: &task.Periodic{
-				Interval: time.Duration(pullInterval) * time.Second,
+				Interval: c.pullInterval,
 				Execute:  c.userInfoMonitor,
 			}},
 		periodicTask{
 			tag: "traffic report",
 			Periodic: &task.Periodic{
-				Interval: time.Duration(pushInterval) * time.Second,
+				Interval: c.pushInterval,
 				Execute:  c.pushMonitor,
 			}},
 	)
@@ -191,7 +197,7 @@ func (c *Controller) Start() error {
 		c.tasks = append(c.tasks, periodicTask{
 			tag: "cert monitor",
 			Periodic: &task.Periodic{
-				Interval: time.Duration(pullInterval) * time.Second * 60,
+				Interval: c.pullInterval * 60,
 				Execute:  c.certMonitor,
 			}})
 	}
@@ -219,8 +225,8 @@ func (c *Controller) Close() error {
 }
 
 func (c *Controller) nodeInfoMonitor() (err error) {
-	// delay to start
-	if time.Since(c.startAt) < time.Duration(firstNonZero(c.config.PullInterval, defaultUpdatePeriodic))*time.Second {
+	// delay to start: skip the first fire, Start() already fetched everything.
+	if time.Since(c.startAt) < c.pullInterval {
 		return nil
 	}
 
@@ -560,8 +566,8 @@ func firstNonZero(vals ...int) int {
 // applies auto speed-limit decisions and stashes the counters as pending traffic
 // for pushMonitor to report and reset.
 func (c *Controller) userInfoMonitor() (err error) {
-	// delay to start
-	if time.Since(c.startAt) < time.Duration(defaultUpdatePeriodic)*time.Second {
+	// delay to start: skip the first fire, no counters have accumulated yet.
+	if time.Since(c.startAt) < c.pullInterval {
 		return nil
 	}
 
@@ -572,7 +578,6 @@ func (c *Controller) userInfoMonitor() (err error) {
 
 	// Snapshot shared state under the same lock the writer uses.
 	c.trafficMu.Lock()
-	nodePullInterval := c.nodeInfo.PullInterval
 	userListSnapshot := *c.userList
 	// Unlock below after building userTraffic; keep critical section small.
 	c.trafficMu.Unlock()
@@ -584,7 +589,7 @@ func (c *Controller) userInfoMonitor() (err error) {
 	var upCounterList []stats.Counter
 	var downCounterList []stats.Counter
 	AutoSpeedLimit := int64(c.config.AutoSpeedLimitConfig.Limit)
-	UpdatePeriodic := int64(firstNonZero(c.config.PullInterval, nodePullInterval, c.config.UpdatePeriodic, defaultUpdatePeriodic))
+	UpdatePeriodic := int64(c.pullInterval / time.Second)
 	limitedUsers := make([]api.UserInfo, 0)
 	overSpeeds := make([]api.UserInfo, 0)
 	for _, user := range userListSnapshot {
@@ -678,8 +683,8 @@ func unlockExpiredLimitsLocked(c *Controller) {
 // traffic (resetting xray counters only after a successful report), online
 // devices and audit-rule hits to the panel.
 func (c *Controller) pushMonitor() (err error) {
-	// delay to start
-	if time.Since(c.startAt) < time.Duration(defaultUpdatePeriodic)*time.Second {
+	// delay to start: skip the first fire, the pull side has not sampled yet.
+	if time.Since(c.startAt) < c.pushInterval {
 		return nil
 	}
 
