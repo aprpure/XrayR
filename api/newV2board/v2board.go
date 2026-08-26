@@ -35,7 +35,6 @@ type APIClient struct {
 	LocalRuleList []api.DetectRule
 	resp          atomic.Value
 	eTags         map[string]string
-	AliveMap      *AliveMap
 }
 
 // New create an api instance
@@ -89,7 +88,6 @@ func New(apiConfig *api.Config) *APIClient {
 		DeviceLimit:   apiConfig.DeviceLimit,
 		LocalRuleList: localRuleList,
 		eTags:         make(map[string]string),
-		AliveMap:      &AliveMap{},
 	}
 	return apiClient
 }
@@ -223,8 +221,6 @@ func (c *APIClient) GetUserList() (UserList *[]api.UserInfo, err error) {
 		ForceContentType("application/json").
 		Get(path)
 
-	_, _ = c.GetUserAlive()
-
 	// Etag identifier for a specific version of a resource. StatusCode = 304 means no changed
 	if res.StatusCode() == 304 {
 		return nil, errors.New(api.UserNotModified)
@@ -281,28 +277,29 @@ func (c *APIClient) GetUserList() (UserList *[]api.UserInfo, err error) {
 	return &userList, nil
 }
 
-// GetUserAlive will fetch the alive_ip count for users
+// GetUserAlive will fetch the alive_ip count for users. On any failure it
+// returns an error and no map — callers keep their previous snapshot instead of
+// silently treating every device as offline.
 func (c *APIClient) GetUserAlive() (map[int]int, error) {
 	const path = "/api/v1/server/UniProxy/alivelist"
 	r, err := c.client.R().
 		ForceContentType("application/json").
 		Get(path)
-	if err != nil || r.StatusCode() > 399 {
-		c.AliveMap.Alive = make(map[int]int)
-		return nil, nil
+	if err != nil {
+		return nil, fmt.Errorf("request %s failed: %v", c.assembleURL(path), err)
+	}
+	if r.StatusCode() > 399 {
+		return nil, fmt.Errorf("request %s failed: %s", c.assembleURL(path), r.String())
 	}
 
-	if r != nil {
-		defer r.RawResponse.Body.Close()
-	} else {
-		return nil, fmt.Errorf("received nil response")
-	}
-	c.AliveMap = &AliveMap{}
-	if err := json.Unmarshal(r.Body(), c.AliveMap); err != nil {
+	aliveMap := new(AliveMap)
+	if err := json.Unmarshal(r.Body(), aliveMap); err != nil {
 		return nil, fmt.Errorf("unmarshal user alive list error: %s", err)
 	}
-
-	return c.AliveMap.Alive, nil
+	if aliveMap.Alive == nil {
+		aliveMap.Alive = make(map[int]int)
+	}
+	return aliveMap.Alive, nil
 }
 
 // ReportUserTraffic reports the user traffic

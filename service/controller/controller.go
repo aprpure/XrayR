@@ -17,7 +17,6 @@ import (
 	"github.com/xtls/xray-core/features/stats"
 
 	"github.com/aprpure/XrayR/api"
-	"github.com/aprpure/XrayR/api/newV2board"
 	"github.com/aprpure/XrayR/app/mydispatcher"
 	"github.com/aprpure/XrayR/common/mylego"
 	"github.com/aprpure/XrayR/common/serverstatus"
@@ -131,8 +130,10 @@ func (c *Controller) Start() error {
 	}
 
 	// Update alive user list
-	if v2b, ok := c.apiClient.(*newV2board.APIClient); ok {
-		if err := c.dispatcher.Limiter.SetAliveList(c.Tag, v2b.AliveMap.Alive); err != nil {
+	if alive, err := c.fetchAliveList(); err != nil {
+		c.logger.Printf("Get user alive list failed: %s", err)
+	} else if alive != nil {
+		if err := c.dispatcher.Limiter.SetAliveList(c.Tag, alive); err != nil {
 			c.logger.Print(err)
 		}
 	}
@@ -244,8 +245,10 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 	newUserInfo, err := c.apiClient.GetUserList()
 
 	// Update alive user list
-	if v2b, ok := c.apiClient.(*newV2board.APIClient); ok {
-		if err := c.dispatcher.Limiter.SetAliveList(c.Tag, v2b.AliveMap.Alive); err != nil {
+	if alive, err := c.fetchAliveList(); err != nil {
+		c.logger.Printf("Get user alive list failed: %s", err)
+	} else if alive != nil {
+		if err := c.dispatcher.Limiter.SetAliveList(c.Tag, alive); err != nil {
 			c.logger.Print(err)
 		}
 	}
@@ -354,6 +357,16 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 	c.userList = newUserInfo
 	c.trafficMu.Unlock()
 	return nil
+}
+
+// fetchAliveList pulls per-user alive-IP counts from panels that support it
+// (api.AliveGetter). Returns (nil, nil) for panels without the capability.
+func (c *Controller) fetchAliveList() (map[int]int, error) {
+	aliveGetter, ok := c.apiClient.(api.AliveGetter)
+	if !ok {
+		return nil, nil
+	}
+	return aliveGetter.GetUserAlive()
 }
 
 func (c *Controller) removeOldTag(oldTag string) (err error) {

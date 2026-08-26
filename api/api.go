@@ -15,3 +15,10 @@ type API interface {
 	ReportIllegal(detectResultList *[]DetectResult) (err error)
 	Debug()
 }
+
+// AliveGetter is an optional capability of panel APIs that can report per-user
+// alive-IP counts. Controllers type-assert to it; panels without the endpoint
+// simply do not implement it.
+type AliveGetter interface {
+	GetUserAlive() (alive map[int]int, err error)
+}
