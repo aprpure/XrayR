@@ -14,7 +14,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/bitly/go-simplejson"
 	"github.com/go-resty/resty/v2"
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/infra/conf"
@@ -43,6 +42,11 @@ type APIClient struct {
 func New(apiConfig *api.Config) *APIClient {
 	client := resty.New()
 	client.SetRetryCount(3)
+	// Retry only idempotent GETs; never re-send POSTs (traffic reports are
+	// not idempotent - a lost response followed by a retry double-counts).
+	client.AddRetryCondition(func(r *resty.Response, err error) bool {
+		return err != nil && r.Request.Method != "POST"
+	})
 	if apiConfig.Timeout > 0 {
 		client.SetTimeout(time.Duration(apiConfig.Timeout) * time.Second)
 	} else {
@@ -136,7 +140,10 @@ func (c *APIClient) assembleURL(path string) string {
 	return c.APIHost + path
 }
 
-func (c *APIClient) parseResponse(res *resty.Response, path string, err error) (*simplejson.Json, error) {
+// parseResponse validates the transport error and status code. The body is
+// returned untouched so callers can json.Unmarshal it straight into their
+// structs (no intermediate simplejson parse/re-encode round trip).
+func (c *APIClient) parseResponse(res *resty.Response, path string, err error) (*resty.Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("request %s failed: %v", c.assembleURL(path), err)
 	}
@@ -145,12 +152,7 @@ func (c *APIClient) parseResponse(res *resty.Response, path string, err error) (
 		return nil, fmt.Errorf("request %s failed: %s, %v", c.assembleURL(path), res.String(), err)
 	}
 
-	rtn, err := simplejson.NewJson(res.Body())
-	if err != nil {
-		return nil, fmt.Errorf("ret %s invalid", res.String())
-	}
-
-	return rtn, nil
+	return res, nil
 }
 
 // GetNodeInfo will pull NodeInfo Config from panel
@@ -172,12 +174,13 @@ func (c *APIClient) GetNodeInfo() (nodeInfo *api.NodeInfo, err error) {
 		c.eTags["node"] = res.Header().Get("Etag")
 	}
 
-	nodeInfoResp, err := c.parseResponse(res, path, err)
+	res, err = c.parseResponse(res, path, err)
 	if err != nil {
 		return nil, err
 	}
-	b, _ := nodeInfoResp.Encode()
-	json.Unmarshal(b, server)
+	if err := json.Unmarshal(res.Body(), server); err != nil {
+		return nil, fmt.Errorf("parse node config failed: %s, \nError: %v", res.String(), err)
+	}
 
 	if server.ServerPort == 0 {
 		return nil, errors.New("server port must > 0")
@@ -231,12 +234,17 @@ func (c *APIClient) GetUserList() (UserList *[]api.UserInfo, err error) {
 		c.eTags["users"] = res.Header().Get("Etag")
 	}
 
-	usersResp, err := c.parseResponse(res, path, err)
+	res, err = c.parseResponse(res, path, err)
 	if err != nil {
 		return nil, err
 	}
-	b, _ := usersResp.Get("users").Encode()
-	json.Unmarshal(b, &users)
+	usersResp := struct {
+		Users []*user `json:"users"`
+	}{}
+	if err := json.Unmarshal(res.Body(), &usersResp); err != nil {
+		return nil, fmt.Errorf("parse user list failed: %s, \nError: %v", res.String(), err)
+	}
+	users = usersResp.Users
 	if len(users) == 0 {
 		return nil, errors.New("users is null")
 	}
@@ -382,8 +390,7 @@ func (c *APIClient) parseTrojanNodeResponse(s *serverConfig) (*api.NodeInfo, err
 			if httpHeader, err := s.NetworkSettings.Headers.MarshalJSON(); err != nil {
 				return nil, err
 			} else {
-				b, _ := simplejson.NewJson(httpHeader)
-				host = b.Get("Host").MustString()
+				host = extractHeaderHost(httpHeader)
 			}
 		}
 	case "tcp":
@@ -413,6 +420,21 @@ func (c *APIClient) parseTrojanNodeResponse(s *serverConfig) (*api.NodeInfo, err
 	return nodeInfo, nil
 }
 
+// extractHeaderHost pulls the Host value out of a JSON headers object
+// (case-insensitive, matching the old simplejson lookup).
+func extractHeaderHost(headerJSON json.RawMessage) string {
+	var headers map[string]string
+	if err := json.Unmarshal(headerJSON, &headers); err != nil {
+		return ""
+	}
+	for k, v := range headers {
+		if strings.EqualFold(k, "Host") {
+			return v
+		}
+	}
+	return ""
+}
+
 // parseSSNodeResponse parse the response for the given nodeInfo format
 func (c *APIClient) parseSSNodeResponse(s *serverConfig) (*api.NodeInfo, error) {
 	var header json.RawMessage
@@ -426,10 +448,7 @@ func (c *APIClient) parseSSNodeResponse(s *serverConfig) (*api.NodeInfo, error) 
 				path += p
 			}
 		}
-		h := simplejson.New()
-		h.Set("type", "http")
-		h.SetPath([]string{"request", "path"}, path)
-		header, _ = h.Encode()
+		header = json.RawMessage(`{"type":"http","request":{"path":` + strconv.Quote(path) + `}}`)
 	}
 	// Create GeneralNodeInfo
 	return &api.NodeInfo{
@@ -473,8 +492,7 @@ func (c *APIClient) parseV2rayNodeResponse(s *serverConfig) (*api.NodeInfo, erro
 			if httpHeader, err := s.NetworkSettings.Headers.MarshalJSON(); err != nil {
 				return nil, err
 			} else {
-				b, _ := simplejson.NewJson(httpHeader)
-				host = b.Get("Host").MustString()
+				host = extractHeaderHost(httpHeader)
 			}
 		}
 	case "tcp":
@@ -490,8 +508,7 @@ func (c *APIClient) parseV2rayNodeResponse(s *serverConfig) (*api.NodeInfo, erro
 			if httpHeaders, err := s.NetworkSettings.Headers.MarshalJSON(); err != nil {
 				return nil, err
 			} else {
-				b, _ := simplejson.NewJson(httpHeaders)
-				host = b.Get("Host").MustString()
+				host = extractHeaderHost(httpHeaders)
 			}
 		}
 		if s.NetworkSettings.Host != "" {

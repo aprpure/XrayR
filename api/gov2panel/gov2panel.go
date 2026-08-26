@@ -12,7 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bitly/go-simplejson"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/go-resty/resty/v2"
@@ -43,6 +42,11 @@ type APIClient struct {
 func New(apiConfig *api.Config) *APIClient {
 	client := resty.New()
 	client.SetRetryCount(3)
+	// Retry only idempotent GETs; never re-send POSTs (traffic reports are
+	// not idempotent - a lost response followed by a retry double-counts).
+	client.AddRetryCondition(func(r *resty.Response, err error) bool {
+		return err != nil && r.Request.Method != "POST"
+	})
 	if apiConfig.Timeout > 0 {
 		client.SetTimeout(time.Duration(apiConfig.Timeout) * time.Second)
 	} else {
@@ -127,7 +131,10 @@ func (c *APIClient) assembleURL(path string) string {
 	return c.APIHost + path
 }
 
-func (c *APIClient) parseResponse(res *resty.Response, path string, err error) (*simplejson.Json, error) {
+// parseResponse validates the transport error and status code. The body is
+// returned untouched so callers can json.Unmarshal it straight into their
+// structs (no intermediate simplejson parse/re-encode round trip).
+func (c *APIClient) parseResponse(res *resty.Response, path string, err error) (*resty.Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("request %s failed: %v", c.assembleURL(path), err)
 	}
@@ -136,12 +143,7 @@ func (c *APIClient) parseResponse(res *resty.Response, path string, err error) (
 		return nil, fmt.Errorf("request %s failed: %s, %v", c.assembleURL(path), res.String(), err)
 	}
 
-	rtn, err := simplejson.NewJson(res.Body())
-	if err != nil {
-		return nil, fmt.Errorf("ret %s invalid", res.String())
-	}
-
-	return rtn, nil
+	return res, nil
 }
 
 // GetNodeInfo will pull NodeInfo Config from panel
@@ -163,12 +165,13 @@ func (c *APIClient) GetNodeInfo() (nodeInfo *api.NodeInfo, err error) {
 		c.eTags["node"] = res.Header().Get("Etag")
 	}
 
-	nodeInfoResp, err := c.parseResponse(res, path, err)
+	res, err = c.parseResponse(res, path, err)
 	if err != nil {
 		return nil, err
 	}
-	b, _ := nodeInfoResp.Encode()
-	json.Unmarshal(b, server)
+	if err := json.Unmarshal(res.Body(), server); err != nil {
+		return nil, fmt.Errorf("parse node config failed: %s, \nError: %v", res.String(), err)
+	}
 
 	if gconv.Uint32(server.Port) == 0 {
 		return nil, errors.New("server port must > 0")
@@ -220,12 +223,17 @@ func (c *APIClient) GetUserList() (UserList *[]api.UserInfo, err error) {
 		c.eTags["users"] = res.Header().Get("Etag")
 	}
 
-	usersResp, err := c.parseResponse(res, path, err)
+	res, err = c.parseResponse(res, path, err)
 	if err != nil {
 		return nil, err
 	}
-	b, _ := usersResp.Get("users").Encode()
-	json.Unmarshal(b, &users)
+	usersResp := struct {
+		Users []*user `json:"users"`
+	}{}
+	if err := json.Unmarshal(res.Body(), &usersResp); err != nil {
+		return nil, fmt.Errorf("parse user list failed: %s, \nError: %v", res.String(), err)
+	}
+	users = usersResp.Users
 	if len(users) == 0 {
 		return nil, errors.New("users is null")
 	}
@@ -331,10 +339,7 @@ func (c *APIClient) parseSSNodeResponse(s *serverConfig) (*api.NodeInfo, error) 
 				path += p
 			}
 		}
-		h := simplejson.New()
-		h.Set("type", "http")
-		h.SetPath([]string{"request", "path"}, path)
-		header, _ = h.Encode()
+		header = json.RawMessage(`{"type":"http","request":{"path":` + strconv.Quote(path) + `}}`)
 	}
 	// Create GeneralNodeInfo
 	return &api.NodeInfo{

@@ -44,6 +44,11 @@ func New(apiConfig *api.Config) *APIClient {
 
 	client := resty.New()
 	client.SetRetryCount(3)
+	// Retry only idempotent GETs; never re-send POSTs (traffic reports are
+	// not idempotent - a lost response followed by a retry double-counts).
+	client.AddRetryCondition(func(r *resty.Response, err error) bool {
+		return err != nil && r.Request.Method != "POST"
+	})
 	if apiConfig.Timeout > 0 {
 		client.SetTimeout(time.Duration(apiConfig.Timeout) * time.Second)
 	} else {

@@ -2,20 +2,26 @@
 package rule
 
 import (
-	"fmt"
-	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 
-	mapset "github.com/deckarep/golang-set"
 	log "github.com/sirupsen/logrus"
 	"github.com/aprpure/XrayR/api"
 )
 
+type inboundRules struct {
+	rules []api.DetectRule
+	// combined matches all rule patterns in a single regexp; nil when there is
+	// only one rule (or joining them failed to compile) and Detect falls back
+	// to scanning rules one by one.
+	combined *regexp.Regexp
+}
+
 type Manager struct {
-	InboundRule         *sync.Map // Key: Tag, Value: []api.DetectRule
-	InboundDetectResult *sync.Map // key: Tag, Value: mapset.NewSet []api.DetectResult
+	InboundRule         *sync.Map // Key: Tag, Value: *inboundRules
+	InboundDetectResult *sync.Map // key: Tag, Value: map[api.DetectResult]struct{}
 }
 
 func New() *Manager {
@@ -26,12 +32,19 @@ func New() *Manager {
 }
 
 func (r *Manager) UpdateRule(tag string, newRuleList []api.DetectRule) error {
-	if value, ok := r.InboundRule.LoadOrStore(tag, newRuleList); ok {
-		oldRuleList := value.([]api.DetectRule)
-		if !reflect.DeepEqual(oldRuleList, newRuleList) {
-			r.InboundRule.Store(tag, newRuleList)
+	inbound := &inboundRules{rules: newRuleList}
+	if len(newRuleList) > 1 {
+		patterns := make([]string, len(newRuleList))
+		for i := range newRuleList {
+			patterns[i] = newRuleList[i].Pattern.String()
+		}
+		if combined, err := regexp.Compile(strings.Join(patterns, "|")); err == nil {
+			inbound.combined = combined
+		} else {
+			log.Debug("combine audit rules failed, falling back to per-rule scan: ", err)
 		}
 	}
+	r.InboundRule.Store(tag, inbound)
 	return nil
 }
 
@@ -46,45 +59,60 @@ func (r *Manager) RemoveInbound(tag string) {
 func (r *Manager) GetDetectResult(tag string) (*[]api.DetectResult, error) {
 	detectResult := make([]api.DetectResult, 0)
 	if value, ok := r.InboundDetectResult.LoadAndDelete(tag); ok {
-		resultSet := value.(mapset.Set)
-		it := resultSet.Iterator()
-		for result := range it.C {
-			detectResult = append(detectResult, result.(api.DetectResult))
+		resultSet := value.(map[api.DetectResult]struct{})
+		for result := range resultSet {
+			detectResult = append(detectResult, result)
 		}
 	}
 	return &detectResult, nil
 }
 
 func (r *Manager) Detect(tag string, destination string, email string) (reject bool) {
-	reject = false
-	var hitRuleID = -1
-	// If we have some rule for this inbound
-	if value, ok := r.InboundRule.Load(tag); ok {
-		ruleList := value.([]api.DetectRule)
-		for _, r := range ruleList {
-			if r.Pattern.Match([]byte(destination)) {
-				hitRuleID = r.ID
-				reject = true
+	value, ok := r.InboundRule.Load(tag)
+	if !ok {
+		return false
+	}
+	inbound := value.(*inboundRules)
+
+	hit := -1
+	if inbound.combined != nil {
+		// Single pass over all patterns; locate the hit rule only on a match.
+		if inbound.combined.MatchString(destination) {
+			for i := range inbound.rules {
+				if inbound.rules[i].Pattern.MatchString(destination) {
+					hit = inbound.rules[i].ID
+					break
+				}
+			}
+		}
+	} else {
+		for i := range inbound.rules {
+			if inbound.rules[i].Pattern.MatchString(destination) {
+				hit = inbound.rules[i].ID
 				break
 			}
 		}
-		// If we hit some rule
-		if reject && hitRuleID != -1 {
-			l := strings.Split(email, "|")
-			uid, err := strconv.Atoi(l[len(l)-1])
-			if err != nil {
-				log.Debug(fmt.Sprintf("Record illegal behavior failed! Cannot find user's uid: %s", email))
-				return reject
-			}
-			newSet := mapset.NewSetWith(api.DetectResult{UID: uid, RuleID: hitRuleID})
-			// If there are any hit history
-			if v, ok := r.InboundDetectResult.LoadOrStore(tag, newSet); ok {
-				resultSet := v.(mapset.Set)
-				// If this is a new record
-				if resultSet.Add(api.DetectResult{UID: uid, RuleID: hitRuleID}) {
-					r.InboundDetectResult.Store(tag, resultSet)
-				}
-			}
+	}
+	if hit == -1 {
+		return false
+	}
+	reject = true
+
+	l := strings.Split(email, "|")
+	uid, err := strconv.Atoi(l[len(l)-1])
+	if err != nil {
+		log.Debug("Record illegal behavior failed! Cannot find user's uid: ", email)
+		return reject
+	}
+	newResult := api.DetectResult{UID: uid, RuleID: hit}
+	newSet := map[api.DetectResult]struct{}{newResult: {}}
+	// If there are any hit history
+	if v, ok := r.InboundDetectResult.LoadOrStore(tag, newSet); ok {
+		resultSet := v.(map[api.DetectResult]struct{})
+		// If this is a new record
+		if _, exists := resultSet[newResult]; !exists {
+			resultSet[newResult] = struct{}{}
+			r.InboundDetectResult.Store(tag, resultSet)
 		}
 	}
 	return reject

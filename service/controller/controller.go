@@ -564,35 +564,22 @@ func (c *Controller) userInfoMonitor() (err error) {
 	// Unlock below after building userTraffic; keep critical section small.
 	c.trafficMu.Unlock()
 
-	// Get User traffic
+	// Get User traffic. Stats counters and the user-list snapshot are read
+	// without trafficMu; only the auto-limit decisions and the pendingTraffic
+	// hand-off below need the lock.
 	var userTraffic []api.UserTraffic
 	var upCounterList []stats.Counter
 	var downCounterList []stats.Counter
 	AutoSpeedLimit := int64(c.config.AutoSpeedLimitConfig.Limit)
 	UpdatePeriodic := int64(firstNonZero(c.config.PullInterval, nodePullInterval, c.config.UpdatePeriodic, defaultUpdatePeriodic))
 	limitedUsers := make([]api.UserInfo, 0)
-
-	c.trafficMu.Lock()
+	overSpeeds := make([]api.UserInfo, 0)
 	for _, user := range userListSnapshot {
 		up, down, upCounter, downCounter := c.getTraffic(c.buildUserTag(&user))
 		if up > 0 || down > 0 {
-			// Over speed users
-			if AutoSpeedLimit > 0 {
-				if down > AutoSpeedLimit*1000000*UpdatePeriodic/8 || up > AutoSpeedLimit*1000000*UpdatePeriodic/8 {
-					if _, ok := c.limitedUsers[user]; !ok {
-						if c.config.AutoSpeedLimitConfig.WarnTimes == 0 {
-							limitUserLocked(c, user, &limitedUsers)
-						} else {
-							c.warnedUsers[user] += 1
-							if c.warnedUsers[user] > c.config.AutoSpeedLimitConfig.WarnTimes {
-								limitUserLocked(c, user, &limitedUsers)
-								delete(c.warnedUsers, user)
-							}
-						}
-					}
-				} else {
-					delete(c.warnedUsers, user)
-				}
+			if AutoSpeedLimit > 0 &&
+				(down > AutoSpeedLimit*1000000*UpdatePeriodic/8 || up > AutoSpeedLimit*1000000*UpdatePeriodic/8) {
+				overSpeeds = append(overSpeeds, user)
 			}
 			userTraffic = append(userTraffic, api.UserTraffic{
 				UID:      user.UID,
@@ -606,8 +593,23 @@ func (c *Controller) userInfoMonitor() (err error) {
 			if downCounter != nil {
 				downCounterList = append(downCounterList, downCounter)
 			}
+		}
+	}
+
+	c.trafficMu.Lock()
+	// Apply warn/limit decisions for over-speed users.
+	for _, user := range overSpeeds {
+		if _, limited := c.limitedUsers[user]; limited {
+			continue
+		}
+		if c.config.AutoSpeedLimitConfig.WarnTimes == 0 {
+			limitUserLocked(c, user, &limitedUsers)
 		} else {
-			delete(c.warnedUsers, user)
+			c.warnedUsers[user] += 1
+			if c.warnedUsers[user] > c.config.AutoSpeedLimitConfig.WarnTimes {
+				limitUserLocked(c, user, &limitedUsers)
+				delete(c.warnedUsers, user)
+			}
 		}
 	}
 

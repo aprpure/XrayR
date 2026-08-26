@@ -207,34 +207,40 @@ func (l *Limiter) GetUserBucket(tag string, email string, ip string, isSourceTCP
 
 		// Local device limit, only for TCP connection
 		if isSourceTCP {
-			ipMap := new(sync.Map)
-			ipMap.Store(ip, uid)
 			var aliveIp int
 			if alive := inboundInfo.AliveList.Load(); alive != nil {
 				aliveIp = (*alive)[uid]
 			}
-			// If any device is online
-			if v, ok := inboundInfo.UserOnlineIP.LoadOrStore(email, ipMap); ok {
+			// Fast path: the user already has an online-IP map. Allocate only on
+			// the first connection of a user (LoadOrStore fallback covers races).
+			if v, ok := inboundInfo.UserOnlineIP.Load(email); ok {
 				ipMap := v.(*sync.Map)
 				// If this is a new ip
-				if _, ok := ipMap.LoadOrStore(ip, uid); !ok {
-					if deviceLimit > 0 {
-						if deviceLimit <= aliveIp {
-							ipMap.Delete(ip)
+				if _, loaded := ipMap.LoadOrStore(ip, uid); !loaded {
+					if deviceLimit > 0 && deviceLimit <= aliveIp {
+						ipMap.Delete(ip)
+						return nil, false, true
+					}
+				}
+			} else {
+				ipMap := new(sync.Map)
+				ipMap.Store(ip, uid)
+				if v, loaded := inboundInfo.UserOnlineIP.LoadOrStore(email, ipMap); loaded {
+					// Lost the race: use the winner's map.
+					winnerMap := v.(*sync.Map)
+					if _, ok := winnerMap.LoadOrStore(ip, uid); !ok {
+						if deviceLimit > 0 && deviceLimit <= aliveIp {
+							winnerMap.Delete(ip)
 							return nil, false, true
 						}
 					}
-				}
-			} else if v, ok := inboundInfo.OldUserOnline.Load(ip); ok {
-				if v.(int) == uid {
-					inboundInfo.OldUserOnline.Delete(ip)
-				}
-			} else {
-				if deviceLimit > 0 {
-					if deviceLimit <= aliveIp {
-						inboundInfo.UserOnlineIP.Delete(email)
-						return nil, false, true
+				} else if v, ok := inboundInfo.OldUserOnline.Load(ip); ok {
+					if v.(int) == uid {
+						inboundInfo.OldUserOnline.Delete(ip)
 					}
+				} else if deviceLimit > 0 && deviceLimit <= aliveIp {
+					inboundInfo.UserOnlineIP.Delete(email)
+					return nil, false, true
 				}
 			}
 		}
@@ -246,28 +252,34 @@ func (l *Limiter) GetUserBucket(tag string, email string, ip string, isSourceTCP
 			}
 		}
 
-		// Speed limit
+		// Speed limit. Load-first: rate.NewLimiter is only allocated for users
+		// without an existing bucket (or on a race, where LoadOrStore resolves it).
 		limit := determineRate(nodeLimit, userLimit) // Determine the speed limit rate
 		if limit > 0 {
+			if v, ok := inboundInfo.BucketHub.Load(email); ok {
+				return v.(*rate.Limiter), true, false
+			}
 			limiter := rate.NewLimiter(rate.Limit(limit), int(limit)) // Byte/s
 			if v, ok := inboundInfo.BucketHub.LoadOrStore(email, limiter); ok {
-				bucket := v.(*rate.Limiter)
-				return bucket, true, false
-			} else {
-				return limiter, true, false
+				return v.(*rate.Limiter), true, false
 			}
-		} else {
-			return nil, false, false
+			return limiter, true, false
 		}
+		return nil, false, false
 	} else {
 		log.Error("Get Inbound Limiter information failed")
 		return nil, false, false
 	}
 }
 
+// globalGetReadTimeout caps how long a new connection waits on the cache read.
+// The check is fail-open (cache errors never reject), so an unreachable redis
+// must not stall connection setup for the full configured Timeout.
+const globalGetReadTimeout = 300 * time.Millisecond
+
 // Global device limit. Returns true when the device limit is reached.
 func globalLimit(inboundInfo *InboundInfo, email string, uid int, ip string, deviceLimit int) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(inboundInfo.GlobalLimit.config.Timeout)*time.Second)
+	readCtx, cancel := context.WithTimeout(context.Background(), globalGetReadTimeout)
 	defer cancel()
 
 	// reformat email for unique key
@@ -279,7 +291,7 @@ func globalLimit(inboundInfo *InboundInfo, email string, uid int, ip string, dev
 	inboundInfo.GlobalLimit.mu.Lock()
 	defer inboundInfo.GlobalLimit.mu.Unlock()
 
-	v, err := inboundInfo.GlobalLimit.globalOnlineIP.Get(ctx, uniqueKey, new(map[string]int))
+	v, err := inboundInfo.GlobalLimit.globalOnlineIP.Get(readCtx, uniqueKey, new(map[string]int))
 	if err != nil {
 		if _, ok := err.(*store.NotFound); ok {
 			// If the email is a new device
