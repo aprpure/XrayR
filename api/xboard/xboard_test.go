@@ -20,11 +20,14 @@ type mockPanel struct {
 	configV1Calls int
 	userV2Calls   int
 	userV1Calls   int
+	aliveV2Calls  int
+	aliveV1Calls  int
 	pushV1Calls   int
 	reportV2Calls int
 
 	configBody string
 	userBody   string
+	aliveBody  string
 }
 
 func (m *mockPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -64,6 +67,16 @@ func (m *mockPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case path == "/api/v1/server/UniProxy/user":
 		m.userV1Calls++
 		w.Write([]byte(m.userBody))
+	case path == "/api/v2/server/alivelist":
+		m.aliveV2Calls++
+		if !m.v2Enabled {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write([]byte(m.aliveBody))
+	case path == "/api/v1/server/UniProxy/alivelist":
+		m.aliveV1Calls++
+		w.Write([]byte(m.aliveBody))
 	case path == "/api/v1/server/UniProxy/push":
 		m.pushV1Calls++
 		w.WriteHeader(http.StatusOK)
@@ -125,6 +138,8 @@ const usersJSON = `{"users": [
   {"id": 101, "uuid": "uuid-a", "speed_limit": 100, "device_limit": 3},
   {"id": 102, "uuid": "uuid-b", "speed_limit": 0, "device_limit": 0}
 ]}`
+
+const aliveJSON = `{"alive": {"101": 2, "102": 1}}`
 
 func TestGetNodeInfoV2(t *testing.T) {
 	panel := &mockPanel{v2Enabled: true, configBody: vlessConfigJSON, userBody: usersJSON}
@@ -237,6 +252,75 @@ func TestGetUserList(t *testing.T) {
 	}
 	if !strings.Contains(u.Email, "@xboard.user") {
 		t.Errorf("Email = %s, want @xboard.user suffix", u.Email)
+	}
+}
+
+func TestGetUserAlive(t *testing.T) {
+	panel := &mockPanel{v2Enabled: true, configBody: vlessConfigJSON, userBody: usersJSON, aliveBody: aliveJSON}
+	server := httptest.NewServer(panel)
+	defer server.Close()
+
+	client := newTestClient(t, server)
+
+	aliveGetter, ok := client.(api.AliveGetter)
+	if !ok {
+		t.Fatal("xboard client should implement api.AliveGetter")
+	}
+	alive, err := aliveGetter.GetUserAlive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if panel.aliveV2Calls != 1 || panel.aliveV1Calls != 0 {
+		t.Errorf("expected V2 alive call only, got v2=%d v1=%d", panel.aliveV2Calls, panel.aliveV1Calls)
+	}
+	if len(alive) != 2 || alive[101] != 2 || alive[102] != 1 {
+		t.Errorf("alive = %v, want {101:2 102:1}", alive)
+	}
+	// A fresh map must be returned per call: the limiter publishes it by
+	// pointer and must never observe it mutated afterwards.
+	first := alive
+	second, err := aliveGetter.GetUserAlive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	first[101] = 999
+	if second[101] != 2 {
+		t.Errorf("second call returned a shared map: 101 = %d after mutating the first", second[101])
+	}
+}
+
+func TestGetUserAliveFallbackToV1(t *testing.T) {
+	panel := &mockPanel{v2Enabled: false, configBody: vlessConfigJSON, userBody: usersJSON, aliveBody: aliveJSON}
+	server := httptest.NewServer(panel)
+	defer server.Close()
+
+	client := newTestClient(t, server)
+
+	aliveGetter, ok := client.(api.AliveGetter)
+	if !ok {
+		t.Fatal("xboard client should implement api.AliveGetter")
+	}
+	alive, err := aliveGetter.GetUserAlive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if panel.aliveV2Calls != 1 {
+		t.Errorf("expected exactly one V2 attempt, got %d", panel.aliveV2Calls)
+	}
+	if panel.aliveV1Calls != 1 {
+		t.Errorf("expected fallback to V1 once, got %d", panel.aliveV1Calls)
+	}
+	if len(alive) != 2 || alive[101] != 2 {
+		t.Errorf("alive = %v, want 2 entries with 101->2", alive)
+	}
+
+	// The V2->V1 switch is client-wide, so the next poll goes straight to V1.
+	if _, err := aliveGetter.GetUserAlive(); err != nil {
+		t.Fatal(err)
+	}
+	if panel.aliveV2Calls != 1 || panel.aliveV1Calls != 2 {
+		t.Errorf("expected no further V2 attempts after fallback, got v2=%d v1=%d",
+			panel.aliveV2Calls, panel.aliveV1Calls)
 	}
 }
 

@@ -1,6 +1,7 @@
 package limiter
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 
@@ -88,5 +89,157 @@ func TestGetOnlineDevicePrunesOldUserOnline(t *testing.T) {
 	}
 	if _, ok := inbound.OldUserOnline.Load("9.9.9.9"); ok {
 		t.Fatal("period2: stale OldUserOnline entry leaked")
+	}
+}
+
+// newDeviceLimitFixture builds a limiter with a single device-limited user and
+// an inbound whose alive list holds the given uid -> alive-IP count map. Pass a
+// nil map to leave AliveList unpublished (the fail-open state).
+//
+// The email handed to GetUserBucket in production is the composite user tag
+// built by the controller (buildUserTag: "{inboundTag}|{email}|{uid}"), which is
+// both the UserInfo map key and the value stored in UserOnlineIP, so the
+// fixture uses the same string throughout.
+func newDeviceLimitFixture(t *testing.T, uid int, deviceLimit int, alive map[int]int) (*Limiter, string, string, *InboundInfo) {
+	t.Helper()
+	l := New()
+	const tag = "Trojan_1.2.3.4_443"
+	email := fmt.Sprintf("%s|u%d@x.user|%d", tag, uid, uid)
+	users := []api.UserInfo{{UID: uid, Email: fmt.Sprintf("u%d@x.user", uid), DeviceLimit: deviceLimit}}
+	if err := l.AddInboundLimiter(tag, 0, &users, nil); err != nil {
+		t.Fatal(err)
+	}
+	if alive != nil {
+		if err := l.SetAliveList(tag, alive); err != nil {
+			t.Fatal(err)
+		}
+	}
+	v, _ := l.InboundInfo.Load(tag)
+	return l, tag, email, v.(*InboundInfo)
+}
+
+// TestGetUserBucketDeviceLimit pins the local device-limit gate. The gate only
+// fires for a NEW local TCP IP when the panel-reported alive-IP count for the
+// user has already reached deviceLimit; known IPs, previously-seen IPs, a
+// missing alive list, and non-TCP sources are all allowed through.
+func TestGetUserBucketDeviceLimit(t *testing.T) {
+	const uid = 7
+
+	tests := []struct {
+		name        string
+		deviceLimit int
+		alive       map[int]int
+		ip          string
+		isSourceTCP bool
+		seedOnline  bool // pre-populate UserOnlineIP with the same ip
+		seedOld     bool // pre-populate OldUserOnline with the same ip
+		wantReject  bool
+	}{
+		{
+			name:        "new ip over limit is rejected",
+			deviceLimit: 2,
+			alive:       map[int]int{uid: 2},
+			ip:          "1.2.3.4",
+			isSourceTCP: true,
+			wantReject:  true,
+		},
+		{
+			name:        "new ip under limit is allowed",
+			deviceLimit: 3,
+			alive:       map[int]int{uid: 2},
+			ip:          "1.2.3.4",
+			isSourceTCP: true,
+			wantReject:  false,
+		},
+		{
+			name:        "no device limit is allowed",
+			deviceLimit: 0,
+			alive:       map[int]int{uid: 9},
+			ip:          "1.2.3.4",
+			isSourceTCP: true,
+			wantReject:  false,
+		},
+		{
+			name:        "missing alive list fails open",
+			deviceLimit: 1,
+			alive:       nil,
+			ip:          "1.2.3.4",
+			isSourceTCP: true,
+			wantReject:  false,
+		},
+		{
+			name:        "uid absent from alive map fails open",
+			deviceLimit: 1,
+			alive:       map[int]int{999: 5},
+			ip:          "1.2.3.4",
+			isSourceTCP: true,
+			wantReject:  false,
+		},
+		{
+			name:        "known ip reconnects even over limit",
+			deviceLimit: 1,
+			alive:       map[int]int{uid: 5},
+			ip:          "1.2.3.4",
+			isSourceTCP: true,
+			seedOnline:  true,
+			wantReject:  false,
+		},
+		{
+			name:        "previously seen ip gets a grace pass",
+			deviceLimit: 1,
+			alive:       map[int]int{uid: 5},
+			ip:          "1.2.3.4",
+			isSourceTCP: true,
+			seedOld:     true,
+			wantReject:  false,
+		},
+		{
+			name:        "non tcp source skips the gate entirely",
+			deviceLimit: 1,
+			alive:       map[int]int{uid: 5},
+			ip:          "1.2.3.4",
+			isSourceTCP: false,
+			wantReject:  false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			l, tag, email, inbound := newDeviceLimitFixture(t, uid, tc.deviceLimit, tc.alive)
+
+			if tc.seedOnline {
+				ipMap := new(syncMap)
+				ipMap.Store(tc.ip, uid)
+				inbound.UserOnlineIP.Store(email, ipMap)
+			}
+			if tc.seedOld {
+				inbound.OldUserOnline.Store(tc.ip, uid)
+			}
+
+			_, _, reject := l.GetUserBucket(tag, email, tc.ip, tc.isSourceTCP)
+			if reject != tc.wantReject {
+				t.Fatalf("Reject = %v, want %v", reject, tc.wantReject)
+			}
+		})
+	}
+}
+
+// TestGetUserBucketDeviceLimitConsumesOldIP verifies the OldUserOnline grace
+// path also removes the entry, so a returning IP gets exactly one free pass
+// rather than a permanent exemption.
+func TestGetUserBucketDeviceLimitConsumesOldIP(t *testing.T) {
+	const uid = 7
+	l, tag, email, inbound := newDeviceLimitFixture(t, uid, 1, map[int]int{uid: 5})
+	inbound.OldUserOnline.Store("1.2.3.4", uid)
+
+	if _, _, reject := l.GetUserBucket(tag, email, "1.2.3.4", true); reject {
+		t.Fatal("first connection from a previously seen IP should be allowed")
+	}
+	if _, ok := inbound.OldUserOnline.Load("1.2.3.4"); ok {
+		t.Fatal("grace entry should be consumed by the first connection")
+	}
+	// The IP is now in UserOnlineIP, so it stays allowed as a known IP.
+	if _, _, reject := l.GetUserBucket(tag, email, "1.2.3.4", true); reject {
+		t.Fatal("known IP should remain allowed after the grace pass")
 	}
 }

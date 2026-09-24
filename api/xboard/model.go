@@ -85,6 +85,14 @@ type usersResponse struct {
 	Users []*user `json:"users"`
 }
 
+// aliveResponse mirrors the panel's alivelist payload:
+// {"alive": {"<uid>": <ipCount>}}. uid keys arrive as JSON strings ("101");
+// encoding/json converts them to int map keys. The panel only includes users
+// with device_limit > 0, so an empty map is the normal case.
+type aliveResponse struct {
+	Alive map[int]int `json:"alive"`
+}
+
 // parseDNSConfig extracts DNS route actions into xray name server config.
 func (s *nodeConfig) parseDNSConfig() (nameServerList []*conf.NameServerConfig) {
 	for i := range s.Routes {

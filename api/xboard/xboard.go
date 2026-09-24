@@ -168,6 +168,14 @@ func (c *APIClient) userPath() string {
 	return "/api/v2/server/user"
 }
 
+// alivePath returns the user alive list path for the currently selected API version.
+func (c *APIClient) alivePath() string {
+	if c.useV1.Load() {
+		return "/api/v1/server/UniProxy/alivelist"
+	}
+	return "/api/v2/server/alivelist"
+}
+
 // nodeTypeForRequests maps local NodeType to the panel's server type.
 // Mirrors the NewV2board client: NodeType=V2ray selects vless only when the
 // local EnableVless switch is on; otherwise it stays "V2ray", which the panel

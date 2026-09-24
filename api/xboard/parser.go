@@ -173,6 +173,48 @@ func (c *APIClient) GetUserList() (*[]api.UserInfo, error) {
 	return &userList, nil
 }
 
+// GetUserAlive fetches per-user alive-IP counts from the panel's alivelist
+// endpoint. Implements api.AliveGetter so the local device limiter gets real
+// data instead of seeing every user as having zero devices online.
+//
+// Errors are propagated rather than swallowed: the controller keeps the
+// previous snapshot on failure, whereas returning an empty map would look like
+// "nobody is online" and let every device past the limit. The map is freshly
+// allocated per call because the limiter publishes it by pointer and must not
+// see it mutated afterwards.
+func (c *APIClient) GetUserAlive() (alive map[int]int, err error) {
+	path := c.alivePath()
+
+	res, err := c.client.R().
+		ForceContentType("application/json").
+		Get(path)
+
+	// Network errors take precedence over any status-code shortcuts.
+	if err != nil {
+		return nil, fmt.Errorf("request %s failed: %v", c.APIHost+path, err)
+	}
+
+	res, err = c.parseResponse(res, path, err)
+	if err != nil {
+		return nil, err
+	}
+	// V2 endpoint just fell back to V1; re-issue the request against V1.
+	if c.useV1.Load() && res.StatusCode() == 404 {
+		return c.GetUserAlive()
+	}
+
+	aliveResp := new(aliveResponse)
+	if err := json.Unmarshal(res.Body(), aliveResp); err != nil {
+		return nil, fmt.Errorf("parse alive list failed: %s, \nError: %v", res.String(), err)
+	}
+	if aliveResp.Alive == nil {
+		// Panel omitted the key entirely; treat as nobody being online.
+		aliveResp.Alive = make(map[int]int)
+	}
+
+	return aliveResp.Alive, nil
+}
+
 // GetNodeRule implements the API interface
 func (c *APIClient) GetNodeRule() (*[]api.DetectRule, error) {
 	v := c.resp.Load()
