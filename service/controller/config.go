@@ -18,6 +18,7 @@ type Config struct {
 	DisableUploadTraffic      bool                             `mapstructure:"DisableUploadTraffic"`
 	DisableGetRule            bool                             `mapstructure:"DisableGetRule"`
 	EnableProxyProtocol       bool                             `mapstructure:"EnableProxyProtocol"`
+	TrustedXForwardedFor      []string                         `mapstructure:"TrustedXForwardedFor"` // Inbound headers trusted to carry the real client IP. See config.yml.example; only enable behind a reverse proxy.
 	EnableFallback            bool                             `mapstructure:"EnableFallback"`
 	DisableSniffing           bool                             `mapstructure:"DisableSniffing"`
 	AutoSpeedLimitConfig      *AutoSpeedLimitConfig            `mapstructure:"AutoSpeedLimitConfig"`

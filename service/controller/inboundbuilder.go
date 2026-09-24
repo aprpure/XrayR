@@ -299,10 +299,15 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		streamSetting.TLSSettings = tlsSettings
 	}
 
-	// Support ProxyProtocol for any transport protocol
-	if networkType != "tcp" && networkType != "ws" && config.EnableProxyProtocol {
+	// Support ProxyProtocol for any transport protocol, and trusting a
+	// reverse proxy's forwarding header for the client IP. Both live in sockopt.
+	if config.EnableProxyProtocol || len(config.TrustedXForwardedFor) > 0 {
 		sockoptConfig := &conf.SocketConfig{
 			AcceptProxyProtocol: config.EnableProxyProtocol,
+		}
+		if len(config.TrustedXForwardedFor) > 0 {
+			// Copy: the config is reused across inbound rebuilds.
+			sockoptConfig.TrustedXForwardedFor = append([]string(nil), config.TrustedXForwardedFor...)
 		}
 		streamSetting.SocketSettings = sockoptConfig
 	}

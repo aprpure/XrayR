@@ -35,6 +35,10 @@ Nodes:
       EnableDNS: false # Use custom DNS config, Please ensure that you set the dns.json well
       DNSType: AsIs # AsIs, UseIP, UseIPv4, UseIPv6, DNS strategy
       EnableProxyProtocol: false # Only works for WebSocket and TCP
+      # TrustedXForwardedFor: # Header names whose presence marks the peer as a trusted reverse
+      #   - X-Forwarded-For # proxy; X-Forwarded-For is then read (first chain entry) for the client
+      #                      # IP. Only enable when the node ports are reachable solely through that
+      #                      # proxy (e.g. ListenIP: 127.0.0.1), else a client can forge its IP.
       AutoSpeedLimitConfig:
         Limit: 0 # Warned speed. Set to 0 to disable AutoSpeedLimit (mbps)
         WarnTimes: 0 # After (WarnTimes) consecutive warnings, the user will be limited. Set to 0 to punish overspeed user immediately.
