@@ -18,7 +18,7 @@ require (
 	github.com/sagernet/sing v0.5.1
 	github.com/sagernet/sing-shadowsocks v0.2.7
 	github.com/shirou/gopsutil/v3 v3.24.2
-	github.com/sirupsen/logrus v1.9.3
+	github.com/sirupsen/logrus v1.10.1
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.12.1
