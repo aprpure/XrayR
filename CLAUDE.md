@@ -22,7 +22,7 @@ go vet ./...                                             # lint
 
 Run: `./XrayR --config config.yml` (viper watches the file and hot-restarts the panel on change). Subcommands: `version`, `x25519` (generate REALITY keypair).
 
-CI builds with `CGO_ENABLED=0` across many GOOS/GOARCH (see `.github/workflows/release.yml`); Dockerfile builds from `golang:1.26-alpine`.
+CI builds with `CGO_ENABLED=0` across many GOOS/GOARCH (see `.github/workflows/release.yml`); Dockerfile builds from `golang:1.27-alpine` (xray-core v26.9.8+ requires go 1.27).
 
 ## Architecture
 
