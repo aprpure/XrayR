@@ -35,5 +35,10 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      # The excluded packages drive a real panel API (they expect a mock server
+      # on localhost:8080 / 127.0.0.1:668) or hit the network for ACME, so they
+      # cannot run here. Everything else is hermetic and must stay green.
       - name: Test
-        run: go test ./... -count=1
+        run: |
+          PKGS=$(go list ./... | grep -vE '/(api/(bunpanel|gov2panel|newV2board|pmpanel|proxypanel|sspanel|v2raysocks)|common/mylego)$')
+          go test $PKGS -count=1
